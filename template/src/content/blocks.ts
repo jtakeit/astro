@@ -659,9 +659,29 @@ export interface Collection {
   order?: { by: string; desc?: boolean };
   /** Paginate the listing. Absent means one page, however many there are. */
   per_page?: number;
+  /**
+   * `false` for a collection whose entries have no page of their own — a
+   * price list, the masters of a workshop, the tables of a restaurant: rows a
+   * page lists and the diary reads, never a route each. The default is a page
+   * per entry, which is what a blog wants.
+   */
+  pages?: boolean;
 }
 
 export const COLLECTIONS: Collection[] = [];
+
+/**
+ * The domain modules this site turns on, and what each is pointed at:
+ *
+ *   export const MODULES: Modules = { bookings: { services: 'services', resources: 'masters' } };
+ *
+ * One door. A module is on because it is named here, and everything that
+ * follows — the settings document `jtk/bookings.json`, the diary, the form's
+ * endpoints, the gate at the launch — asks this one question. The modules
+ * reference on the platform says what each module wants pointed at it.
+ */
+export type Modules = Record<string, Record<string, string>>;
+export const MODULES: Modules = {};
 
 /**
  * The language this site is written in.
