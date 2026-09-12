@@ -679,6 +679,11 @@ export const COLLECTIONS: Collection[] = [];
  * follows — the settings document `jtk/bookings.json`, the diary, the form's
  * endpoints, the gate at the launch — asks this one question. The modules
  * reference on the platform says what each module wants pointed at it.
+ *
+ * The settings document has one shape — a document of one `bookings_config`
+ * block, the settings as its fields — and `jtk catalogue` seeds an empty one
+ * beside the catalogue when it is missing. Fill in the block; do not write
+ * the settings as top-level keys, which the platform refuses on import.
  */
 export type Modules = Record<string, Record<string, string>>;
 export const MODULES: Modules = {};

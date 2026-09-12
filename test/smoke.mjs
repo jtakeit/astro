@@ -1,7 +1,7 @@
 // The scaffold writes a project with every token filled and nothing of the
 // studio's left in it; the catalogue tool emits a file from it.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -31,6 +31,29 @@ try {
   if (pkg.scripts.deploy) fail('a deploy script was scaffolded');
   const de = readFileSync(join(site, 'src/copy/de-CH.ts'), 'utf8');
   if (!de.includes('Zum Inhalt springen')) fail('the copy is not in the site\'s language');
+
+  // The catalogue tool, on the scaffold it just wrote: the file is emitted, and
+  // a module the site turns on gets its settings seeded in the platform's one
+  // shape — once, never over a file that is already there.
+  execFileSync('node', [bin, 'catalogue', '--emit-only'], { cwd: site, stdio: 'pipe' });
+  if (!existsSync(join(site, 'jtk/catalogue.json'))) fail('jtk catalogue wrote no catalogue');
+  if (existsSync(join(site, 'jtk/bookings.json'))) fail('a site without modules was given a diary');
+
+  const blocks = join(site, 'src/content/blocks.ts');
+  writeFileSync(blocks, readFileSync(blocks, 'utf8').replace(
+    'export const MODULES: Modules = {};',
+    "export const MODULES: Modules = { bookings: { services: 'services', resources: 'masters' } };",
+  ));
+  execFileSync('node', [bin, 'catalogue', '--emit-only'], { cwd: site, stdio: 'pipe' });
+  const seeded = JSON.parse(readFileSync(join(site, 'jtk/bookings.json'), 'utf8'));
+  if (seeded.blocks?.[0]?.type !== 'bookings_config' || seeded.blocks[0].v !== 1) fail('the diary was not seeded as one bookings_config block');
+  if (!JSON.parse(readFileSync(join(site, 'jtk/catalogue.json'), 'utf8')).modules?.bookings) fail('MODULES did not reach the catalogue');
+
+  seeded.blocks[0].zone = 'Europe/Zurich';
+  writeFileSync(join(site, 'jtk/bookings.json'), JSON.stringify(seeded));
+  execFileSync('node', [bin, 'catalogue', '--emit-only'], { cwd: site, stdio: 'pipe' });
+  if (JSON.parse(readFileSync(join(site, 'jtk/bookings.json'), 'utf8')).blocks[0].zone !== 'Europe/Zurich') fail('the tool wrote over a diary that was already there');
+
   console.log('smoke: the scaffold is whole');
 } finally {
   rmSync(dir, { recursive: true, force: true });

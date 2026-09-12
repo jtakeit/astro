@@ -35,6 +35,33 @@ jtk/bookings.json     the diary's settings, when the catalogue turns bookings on
 jtk/design.json       the design document the panel reads for the editor's chrome
 ```
 
+`jtk/bookings.json` has one shape, and it is the one a publish writes back: a
+document of one block of type `bookings_config`, with the settings as that
+block's fields. `jtk catalogue` writes the empty skeleton when the file is
+missing; fill it in and commit it, and `import_branch` reads it into the diary
+so the demo takes bookings before anybody opens the panel.
+
+```json
+{
+  "blocks": [
+    {
+      "type": "bookings_config",
+      "v": 1,
+      "zone": "Europe/Zurich",
+      "hours": [{ "day": "monday", "opens": 540, "closes": 1020 }],
+      "horizon": 30,
+      "confirm": "auto",
+      "payment": "no"
+    }
+  ]
+}
+```
+
+Times are whole minutes from midnight (540 is 09:00). The settings written as
+top-level keys — no `blocks` — is the mistake the platform now refuses on import
+with `JTK_E_MODULE_FILE_INVALID`, rather than reading an empty diary out of it.
+The platform's modules reference lists every field.
+
 The repository decides what a site *is*; the panel fills in the values. A commit
 under `jtk/` **is** the published state, and a publish writes these files back.
 `import_branch` reads them into the panel after you commit; `publish` makes them
