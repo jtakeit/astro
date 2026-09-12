@@ -1,15 +1,35 @@
 {
   "name": "@jtakeit/astro",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Astro scaffold and the catalogue tool for a site on jtakeit — the platform's contract, ready to build on",
   "license": "MIT",
   "type": "module",
-  "bin": { "jtk": "bin/jtk.mjs" },
-  "files": ["bin", "lib", "template", "docs", "README.md", "LICENSE"],
-  "engines": { "node": ">=22.12.0" },
-  "repository": { "type": "git", "url": "https://github.com/jtakeit/astro.git" },
+  "bin": {
+    "jtk": "bin/jtk.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "template",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jtakeit/astro.git"
+  },
   "homepage": "https://github.com/jtakeit/astro#readme",
-  "keywords": ["jtakeit", "astro", "scaffold", "catalogue", "agent"],
+  "keywords": [
+    "jtakeit",
+    "astro",
+    "scaffold",
+    "catalogue",
+    "agent"
+  ],
   "scripts": {
     "test": "node test/smoke.mjs"
   }

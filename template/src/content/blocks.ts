@@ -138,6 +138,12 @@ export type Kind =
   | 'media'
   | 'list'
   /**
+   * A reference to an entry of one of this catalogue's own collections — the
+   * service a master does, the range a product is in. The field carries `ref`,
+   * the collection it points into, and its value is an entry's slug.
+   */
+  | 'ref'
+  /**
    * A document rather than a field: the body of an entry in a collection.
    *
    * Markdown, and stored as markdown — the owner never sees the syntax (the
@@ -162,6 +168,8 @@ export interface Field {
   /** What the owner sees above the control, in their language. */
   label: Text;
   kind: Kind;
+  /** For a `ref` field: the collection it points into, by name. */
+  ref?: string;
   /** A sentence under the control, where the field needs one. */
   hint?: Text;
   required?: boolean;
