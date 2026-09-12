@@ -1,0 +1,347 @@
+---
+/**
+ * The lead form.
+ *
+ * It is a real `<form method="post">` first and an in-place submission second:
+ * with JavaScript off the browser posts to the same endpoint and the function
+ * answers with a plain page. The script only spares a working browser the
+ * navigation.
+ *
+ * `novalidate` because the messages are ours, in the client's language, rather
+ * than the browser's in the browser's. Every rule enforced here is enforced
+ * again by the platform behind /api/lead — the endpoint is public and the browser's
+ * checks are a convenience, not a gate.
+ */
+import { FORM, flPath } from '../copy/{{LOCALE}}';
+import { under } from '../lib/under';
+import { BLOCKS, LOCALE, words, type Field } from '../content/blocks';
+
+/**
+ * The site's own questions, from the catalogue (`asks` on the block that
+ * collects). Declared once in blocks.ts and drawn here, so the control on
+ * the page and the label in the owner's inbox are the same declaration —
+ * see the comment on `asks` in blocks.ts for what the platform holds the
+ * form to.
+ */
+const asks: Field[] = BLOCKS.find((block) => block.type === 'cta_banner')?.asks ?? [];
+
+/** The `<input type>` a visitor types this kind into. */
+function inputType(kind: Field['kind']): string {
+  switch (kind) {
+    case 'number': return 'number';
+    case 'tel': return 'tel';
+    case 'email': return 'email';
+    case 'url': return 'url';
+    case 'date': return 'date';
+    case 'time_of_day': return 'time';
+    default: return 'text';
+  }
+}
+
+/**
+ * ── every annotated element is guarded, and this file forgot ────────────────
+ *
+ * `Blocks.astro` wraps each `data-jtk-path` element in a test that its value is
+ * not empty, and where a block carries the form it hands `title`, `lead` and
+ * `cta_label` to this component instead — see `!carriesForm` there. The
+ * responsibility moved and the guard did not, so this file annotated seven
+ * elements whose values were empty.
+ *
+ * That is what `fl-catalogue` calls "on the page and not in the catalogue": it
+ * excuses a field the document leaves empty, on the ground that an empty field
+ * renders nothing. Here it rendered an empty element with a tap target on it,
+ * and a freshly scaffolded project therefore failed its own check before
+ * anybody had written a word.
+ */
+
+---
+
+<form
+  class="lead"
+  method="post"
+  action={under('/api/lead')}
+  novalidate
+  data-lead-form
+  data-success={FORM.success}
+  data-error={FORM.error}
+  data-sending={FORM.sending}
+>
+  <div class="lead__head">
+    {FORM.title && (
+      <h2 class="lead__title" data-jtk-path={flPath('cta_banner', 'title')}>{FORM.title}</h2>
+    )}
+    {FORM.lead && (
+      <p class="lead__lead" data-jtk-path={flPath('cta_banner', 'lead')}>{FORM.lead}</p>
+    )}
+  </div>
+
+  <div class="field">
+    <label class="field__label" for="lead-name">
+      {FORM.name && <span data-jtk-path={flPath('cta_banner', 'name_label')}>{FORM.name}</span>}{' '}
+      <span aria-hidden="true">*</span>
+    </label>
+    <input
+      class="field__input"
+      id="lead-name"
+      name="name"
+      type="text"
+      autocomplete="name"
+      required
+      maxlength="120"
+      data-message={FORM.invalidName}
+    />
+    <p class="field__error" data-error-for="name" hidden></p>
+  </div>
+
+  <div class="field">
+    <label class="field__label" for="lead-contact">
+      {FORM.contact && (
+        <span data-jtk-path={flPath('cta_banner', 'contact_label')}>{FORM.contact}</span>
+      )}{' '}
+      <span aria-hidden="true">*</span>
+    </label>
+    <input
+      class="field__input"
+      id="lead-contact"
+      name="contact"
+      type="text"
+      inputmode="tel"
+      autocomplete="tel"
+      required
+      maxlength="120"
+      data-message={FORM.invalidContact}
+    />
+    <p class="field__error" data-error-for="contact" hidden></p>
+  </div>
+
+  <div class="field">
+    <label class="field__label" for="lead-message">
+      {FORM.message && (
+        <span data-jtk-path={flPath('cta_banner', 'message_label')}>{FORM.message}</span>
+      )}
+    </label>
+    <textarea
+      class="field__input field__input--area"
+      id="lead-message"
+      name="message"
+      rows="4"
+      maxlength="2000"></textarea>
+  </div>
+
+  {asks.map((ask) => (
+    <div class="field">
+      {/* The words are the catalogue's, not the document's: fixed, so the
+          check knows they belong to the declaration and not to nobody. */}
+      <label class="field__label" for={`lead-${ask.key}`} data-jtk-fixed>
+        {words(ask.label, LOCALE)}
+        {ask.required && (
+          <>
+            {' '}
+            <span aria-hidden="true">*</span>
+          </>
+        )}
+      </label>
+      {ask.kind === 'textarea' ? (
+        <textarea
+          class="field__input field__input--area"
+          id={`lead-${ask.key}`}
+          name={ask.key}
+          rows="3"
+          required={ask.required}
+          maxlength={ask.max}></textarea>
+      ) : ask.kind === 'select' ? (
+        <select class="field__input" id={`lead-${ask.key}`} name={ask.key} required={ask.required}>
+          <option value=""></option>
+          {(ask.options ?? []).map((option) => (
+            <option value={option} data-jtk-fixed>{words(ask.option_labels?.[option], LOCALE) || option}</option>
+          ))}
+        </select>
+      ) : ask.kind === 'bool' ? (
+        <input class="field__check" id={`lead-${ask.key}`} name={ask.key} type="checkbox" value="yes" />
+      ) : (
+        <input
+          class="field__input"
+          id={`lead-${ask.key}`}
+          name={ask.key}
+          type={inputType(ask.kind)}
+          required={ask.required}
+          maxlength={ask.max}
+          min={ask.kind === 'number' ? ask.min : undefined}
+          max={ask.kind === 'number' ? ask.max : undefined}
+        />
+      )}
+    </div>
+  ))}
+
+  {/*
+    Bots fill everything; people never see this. Kept out of the tab order and
+    out of the accessibility tree rather than hidden with `display: none`, which
+    some bots detect.
+  */}
+  <div class="trap" aria-hidden="true" data-jtk-fixed>
+    <label for="lead-website">Website</label>
+    <input id="lead-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
+  {FORM.requiredNote && (
+    <p class="lead__legal" data-jtk-path={flPath('cta_banner', 'required_note')}>
+      {FORM.requiredNote}
+    </p>
+  )}
+
+  <div class="lead__foot">
+    <button class="btn" type="submit" data-submit>
+      {FORM.submit && (
+        <span data-submit-label data-jtk-path={flPath('cta_banner', 'cta_label')}>{FORM.submit}</span>
+      )}
+    </button>
+    <p class="lead__status" role="status" data-status></p>
+  </div>
+</form>
+
+<style>
+  .lead {
+    display: grid;
+    gap: 1.25rem;
+    max-inline-size: 34rem;
+  }
+
+  .field {
+    display: grid;
+    gap: 0.375rem;
+  }
+
+  .field__label {
+    font-size: 0.875rem;
+  }
+
+  .field__input {
+    inline-size: 100%;
+    padding: 0.75rem 0.875rem;
+    font: inherit;
+    color: inherit;
+    background: var(--paper-deep, #f2efea);
+    border: 1px solid var(--line, #d9d4cc);
+    border-radius: var(--r-2, 8px);
+  }
+
+  .field__input--area {
+    resize: vertical;
+  }
+
+  .field__error {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--danger, #b3261e);
+  }
+
+  /* Off-screen rather than display:none — see the comment on the honeypot. */
+  .trap {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .lead__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .lead__status {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .lead[data-state='error'] .lead__status {
+    color: var(--danger, #b3261e);
+  }
+</style>
+
+<script>
+  // Progressive enhancement only. Every branch here has a working no-JS
+  // equivalent: without this file the browser posts the form and the function
+  // answers with a page.
+  const form = document.querySelector<HTMLFormElement>('[data-lead-form]');
+
+  if (form) {
+    const status = form.querySelector<HTMLElement>('[data-status]')!;
+    const button = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
+    const original = label.textContent ?? '';
+
+    const showError = (field: string, message: string) => {
+      const el = form.querySelector<HTMLElement>(`[data-error-for="${field}"]`);
+      if (!el) return;
+      el.textContent = message;
+      el.hidden = !message;
+    };
+
+    const clearErrors = () => {
+      form.querySelectorAll<HTMLElement>('[data-error-for]').forEach((el) => {
+        el.textContent = '';
+        el.hidden = true;
+      });
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrors();
+      status.textContent = '';
+      form.removeAttribute('data-state');
+
+      const data = new FormData(form);
+      const required = ['name', 'contact'] as const;
+      let ok = true;
+
+      for (const field of required) {
+        const input = form.elements.namedItem(field) as HTMLInputElement | null;
+        if (!input?.value.trim()) {
+          showError(field, input?.dataset.message ?? '');
+          ok = false;
+        }
+      }
+      if (!ok) return;
+
+      button.disabled = true;
+      label.textContent = form.dataset.sending ?? original;
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: { accept: 'application/json' },
+          body: data,
+        });
+        const body = (await response.json()) as { ok?: boolean; error?: string; message?: string; demo?: boolean };
+
+        if (response.ok && body.ok) {
+          form.reset();
+          status.textContent = form.dataset.success ?? '';
+          // Preview only: the bot is not connected, so nothing was delivered.
+          // Visible to us, meaningless to a visitor. It disappears in production.
+          if (body.demo) status.textContent += ' ⚠︎';
+        } else if (body.error === 'anonymous' || body.error === 'unreachable') {
+          // The platform refuses by name — no name, no way back to the sender —
+          // and the sentence for each is the one the field already carries.
+          const at = body.error === 'anonymous' ? 'name' : 'contact';
+          const input = form.elements.namedItem(at) as HTMLInputElement | null;
+          showError(at, input?.dataset.message ?? '');
+          input?.focus();
+        } else {
+          form.setAttribute('data-state', 'error');
+          status.textContent = body.message ?? form.dataset.error ?? '';
+        }
+      } catch {
+        form.setAttribute('data-state', 'error');
+        status.textContent = form.dataset.error ?? '';
+      } finally {
+        button.disabled = false;
+        label.textContent = original;
+      }
+    });
+  }
+</script>

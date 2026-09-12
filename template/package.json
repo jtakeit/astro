@@ -1,0 +1,26 @@
+{
+  "name": "{{SLUG}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "{{NAME}} — a site on jtakeit",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro check",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "0.3.7",
+    "astro": "7.2.4",
+    "libphonenumber-js": "1.13.11"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@types/node": "26.2.0",
+    "typescript": "6.0.3"
+  }
+}

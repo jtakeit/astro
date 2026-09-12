@@ -1,0 +1,38 @@
+{
+  "path": "/",
+  "seo": {
+    "title": "",
+    "description": ""
+  },
+  "blocks": [
+    {
+      "_key": "hero0001",
+      "type": "hero",
+      "v": 1,
+      "eyebrow": "",
+      "title": "",
+      "lead": "",
+      "cta_label": "",
+      "cta_href": "#contact",
+      "image": "",
+      "image_alt": ""
+    },
+    {
+      "_key": "ctab0001",
+      "type": "cta_banner",
+      "v": 1,
+      "title": "",
+      "lead": "",
+      "cta_label": "",
+      "cta_href": "#contact",
+      "form": true
+    },
+    {
+      "_key": "ques0001",
+      "type": "questions",
+      "v": 1,
+      "title": "",
+      "items": []
+    }
+  ]
+}

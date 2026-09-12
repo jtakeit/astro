@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.astro/
+.env
+.env.*
+.DS_Store
+
+# Assembled at build time by the platform's pipeline from jtk/content/*.json.
+# A build artifact that happens to sit at the repository root; a stale copy in
+# git is a second answer to "what does this site say".
+jtk-content.json
+
+# An entry's pictures, downloaded beside the entry at build time: a picture in
+# a post's body is markdown — `![alt](media/<site>/<hash>.jpg)` — resolved
+# relative to the file, so the build puts the file exactly where the body says.
+jtk/content/**/media/

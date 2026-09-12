@@ -1,0 +1,90 @@
+---
+/**
+ * The landing page.
+ *
+ * A deliberately plain starting point: the structure and every visual decision
+ * come from the brief, through the frontend-design skill, one variant at a
+ * time. Nothing here is a design suggestion — it is a page that builds, with a
+ * correct <head>, a working form, a photo slot and every section of the content
+ * document rendered, so the first commit of a new project is already deployable
+ * and a generated one is already viewable.
+ *
+ * ── data-jtk-path, and why it is here from the first commit ──────────────────
+ *
+ * The studio's admin edits this site by tapping the text on it. That works
+ * because every element whose content comes from `jtk/content/index.json`
+ * carries the path of the field it came from, and `flPath` builds those from
+ * the document rather than from anything written by hand.
+ *
+ * The build fails without them — `annotation-lint.mjs` compares the published
+ * content against the generated HTML and refuses a page that dropped one. It is
+ * a gate rather than a convention, because an element that loses its path stops
+ * opening the editor **silently**, and nobody finds out for a week.
+ *
+ * So: whatever a variant does to this page, every field it renders keeps its
+ * `data-jtk-path={flPath(...)}`.
+ *
+ * ── the hero's ground ───────────────────────────────────────────────────────
+ *
+ * `jtk/design.json` holds the palette and which of the ten fields to
+ * paint. It is a document rather than props written into this file for the same
+ * reason the copy is: it can then be changed without an agent, and the studio
+ * bar's live accent drives the same tokens. With the document empty — a fresh
+ * `fl-init`, before anything has been designed — the hero is a plain section on
+ * the kit's own ground, which is what a scaffold should be.
+ *
+ * ── the surface ─────────────────────────────────────────────────────────────
+ *
+ * The same document's `surface` block holds the other three choices: the ground
+ * the page is printed on, the edge its blocks are drawn with, and how they
+ * arrive. Empty means none, and none is a real choice rather than a missing
+ * one — on a page carrying strong photographs it is usually the right one. See
+ * `docs/surface.md` of @jtakeit/astro.
+ */
+import Layout from '../layouts/Layout.astro';
+import Hero from '../components/Hero.astro';
+import Blocks from '../components/Blocks.astro';
+import HeroField from '../components/motion/HeroField.astro';
+import Pattern from '../components/surface/Pattern.astro';
+import { HOME } from '../copy/{{LOCALE}}';
+import design from '../../jtk/design.json';
+
+const painted =
+  design.field !== '' && Array.isArray(design.colors) && design.colors.length === 4;
+
+const surface = design.surface ?? {};
+const grounded = Boolean(surface.pattern);
+---
+
+<Layout title={HOME.title} description={HOME.description} suffix={false}>
+  {
+    grounded && (
+      <Pattern
+        pattern={surface.pattern as never}
+        scope={(surface.scope || 'page') as never}
+        size={surface.size || undefined}
+        weight={surface.weight || undefined}
+        opacity={surface.opacity || undefined}
+        draw={surface.draw === true}
+      />
+    )
+  }
+
+  <main id="content">
+    {painted ? (
+      <HeroField
+        field={design.field as never}
+        ground="var(--fl-ground)"
+        colors={['var(--fl-c1)', 'var(--fl-c2)', 'var(--fl-c3)', 'var(--fl-c4)']}
+        scrim={design.scrim !== false}
+        class="hero"
+      >
+        <Hero />
+      </HeroField>
+    ) : (
+      <section class="hero"><Hero /></section>
+    )}
+
+    <Blocks />
+  </main>
+</Layout>

@@ -1,0 +1,282 @@
+---
+import DESIGN from '../../jtk/design.json';
+/**
+ * The document. Written once, derived from data, never repeated per page.
+ *
+ * Everything SEO-shaped here comes out of src/data/site.ts and src/copy — the
+ * host from the build, the facts from one object, the indexability from one
+ * flag. There is deliberately no second place to change any of them.
+ */
+import { BUSINESS, INDEXABLE, SCHEMA_TYPE, canonicalFor } from '../data/site';
+import { under } from '../lib/under';
+import { META } from '../copy/{{LOCALE}}';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Set false on the home page, whose title is already complete. */
+  suffix?: boolean;
+  /** Extra JSON-LD for this page — a Service, an Offer, an FAQPage. */
+  schema?: unknown;
+  bodyClass?: string;
+  /**
+   * Every language this page exists in — `readPage('/prices').alternates`.
+   *
+   * Without it two language versions of one page compete with each other in
+   * search, which is the only part of being multilingual that costs money. A
+   * page in one language passes nothing and nothing is emitted; a `hreflang`
+   * set of one is noise.
+   */
+  alternates?: { locale: string; path: string }[];
+}
+
+const { title, description, suffix = true, schema, bodyClass, alternates = [] } = Astro.props;
+
+const canonical = canonicalFor(Astro.url.pathname);
+// `under` and not a leading slash: `new URL('/og.jpg', …)` throws away the
+// path this build is served under, which under the studio's preview is the
+// whole of the site's address. src/lib/under.ts has the argument.
+const ogImage = new URL(under('/og.jpg'), Astro.site).href;
+const fullTitle = suffix ? `${title}${META.titleSuffix}` : title;
+
+/**
+ * One business, described once, on every page. The `@id` is stable across the
+ * site so the pages describe the same entity rather than a dozen similar ones.
+ *
+ * Only confirmed fields are emitted: an empty value is dropped rather than
+ * asserted as an empty string. geo and openingHours are absent on purpose until
+ * the client confirms them — see src/data/site.ts.
+ */
+const sameAs = [BUSINESS.instagram, BUSINESS.facebook].filter(Boolean);
+
+/**
+ * The palette, as CSS custom properties on :root.
+ *
+ * Written here rather than into a stylesheet so that it stays a *document* —
+ * `jtk/design.json`, beside the content — and can therefore be changed
+ * without rebuilding anybody's opinion into a file. `HeroField` reads its
+ * colours as custom properties and watches the root element for changes, which
+ * is also how the studio bar's live accent picker drives a variant.
+ *
+ * Empty values are left out entirely, so a scaffold nobody has designed keeps
+ * the kit's own tokens instead of inheriting a page of blanks.
+ */
+const palette: Record<string, string> = {};
+
+/*
+ * Which way up the page is.
+ *
+ * A photograph's shadows are dark on any page — but `--ink` and `--paper` swap
+ * over on a dark one, so the treatment tokens derived from them come out
+ * inverted and `duotone` folds a photograph into a flat rectangle. It looked
+ * like a broken blend mode and it was a palette read upside down.
+ *
+ * The document has both colours as literals, so the page can be asked rather
+ * than assumed. No palette chosen yet means the kit's own light tokens, which
+ * is what global.css already declares.
+ */
+const luminance = (hex: string): number | null => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    .map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    })
+    .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+};
+
+const paperLuma = DESIGN.paper ? luminance(DESIGN.paper) : null;
+const inkLuma = DESIGN.ink ? luminance(DESIGN.ink) : null;
+const invertedPage = paperLuma !== null && inkLuma !== null && paperLuma < inkLuma;
+
+if (DESIGN.paper) palette['--paper'] = DESIGN.paper;
+if (DESIGN.paper) palette['--panel'] = DESIGN.paper;
+if (DESIGN.ink) palette['--ink'] = DESIGN.ink;
+if (DESIGN.accent) palette['--accent'] = DESIGN.accent;
+if (DESIGN.accent) palette['--accent-ink'] = DESIGN.accent;
+if (DESIGN.ground) palette['--fl-ground'] = DESIGN.ground;
+(DESIGN.colors ?? []).forEach((colour: string, i: number) => {
+  if (colour) palette[`--fl-c${i + 1}`] = colour;
+});
+
+/*
+ * On a dark page the two ends of a photograph's tonal range take the same two
+ * tokens the other way round: the page's ground is what its shadows are tinted
+ * with, and the ink is what its highlights are. A variant can still override
+ * either — this only stops the default from being wrong.
+ */
+if (invertedPage) {
+  palette['--photo-shadow'] = 'color-mix(in srgb, var(--paper) 78%, var(--accent))';
+  palette['--photo-light'] = 'var(--ink)';
+}
+
+const rootStyle = Object.entries(palette)
+  .map(([name, value]) => `${name}:${value}`)
+  .join(';');
+
+const businessSchema = {
+  '@context': 'https://schema.org',
+  '@type': SCHEMA_TYPE,
+  '@id': `${canonicalFor('/')}#business`,
+  name: BUSINESS.name,
+  description: BUSINESS.description || description,
+  url: canonicalFor('/'),
+  image: ogImage,
+  inLanguage: META.lang,
+  ...(BUSINESS.phoneDial ? { telephone: BUSINESS.phoneDial } : {}),
+  ...(BUSINESS.email ? { email: BUSINESS.email } : {}),
+  ...(BUSINESS.priceRange ? { priceRange: BUSINESS.priceRange } : {}),
+  ...(BUSINESS.mapsUrl ? { hasMap: BUSINESS.mapsUrl } : {}),
+  ...(sameAs.length ? { sameAs } : {}),
+  ...(BUSINESS.city
+    ? {
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: BUSINESS.street,
+          postalCode: BUSINESS.postalCode,
+          addressLocality: BUSINESS.city,
+          addressRegion: BUSINESS.region,
+          addressCountry: BUSINESS.country,
+        },
+      }
+    : {}),
+};
+---
+
+<!doctype html>
+<html lang={META.lang} style={rootStyle || undefined}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    {/*
+      The other languages of this page.
+      
+      `x-default` is the site's own language: it is what a search engine shows
+      somebody whose language is none of these, and leaving it out means the
+      engine picks for itself. The locale of the site's own pages is empty in
+      the content, and here it becomes the site's `lang` — the value is the
+      same fact written two ways, so it is written once in META.
+    */}
+    {alternates.map((other) => (
+      <link
+        rel="alternate"
+        hreflang={other.locale === '' ? META.lang : other.locale}
+        href={canonicalFor(other.path)}
+      />
+    ))}
+    {alternates.length > 0 && (
+      <link rel="alternate" hreflang="x-default" href={canonicalFor(alternates.find((one) => one.locale === '')?.path ?? '/')} />
+    )}
+
+    {/* One flag drives this, robots.txt, the sitemap and llms.txt together. */}
+    <meta
+      name="robots"
+      content={INDEXABLE ? 'index, follow, max-image-preview:large' : 'noindex, nofollow'}
+    />
+
+    {/* TODO(prod): Search Console ownership. Independent of robots — Google
+        fetches the page directly to verify, so noindex does not block it. */}
+    {/* <meta name="google-site-verification" content="" /> */}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={BUSINESS.name} />
+    <meta property="og:locale" content={META.ogLocale} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={BUSINESS.name} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {BUSINESS.city && <meta name="geo.placename" content={BUSINESS.city} />}
+
+    {/* iOS turns any number that looks like one into a call link — including
+        prices and dates. The real phone numbers are explicit tel: links. */}
+    <meta name="format-detection" content="telephone=no" />
+
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(businessSchema)} />
+    {schema && <script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />}
+
+    {/* Under the base, like every other address written by hand here: served
+        from `/p/<slug>/` these are three 404s and a page with no icon. */}
+    <link rel="icon" href={under('/favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={under('/favicon-32.png')} sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href={under('/favicon.png')} />
+
+    {/*
+      Marks the document as scripted before first paint, so every hidden start
+      state can hang on `html.js` and a visitor without JavaScript is never left
+      staring at opacity: 0. Wrapped in nothing on purpose — it cannot throw.
+    */}
+    <script is:inline>document.documentElement.classList.add('js');</script>
+  </head>
+
+  <body class={bodyClass}>
+    <slot />
+
+    <script>
+      /*
+       * What turns an entrance on.
+       *
+       * The hidden start states in surface.css all hang on `html.js`, which is
+       * set before first paint above; this adds `.is-in` when the block reaches
+       * the screen, and then stops watching it. A block never re-enters: an
+       * animation that replays on the way back up is the thing clients report
+       * as "it keeps flashing".
+       *
+       * `data-edge="trace"` is watched by the same observer for the same
+       * reason — a border that draws itself is an entrance wearing a different
+       * name.
+       *
+       * With no IntersectionObserver everything is simply in. The page is not
+       * missing anything; it is the page without the entrance.
+       */
+      const targets = document.querySelectorAll<HTMLElement>(
+        '[data-reveal]:not([data-reveal="none"]), [data-edge="trace"]',
+      );
+
+      /* The stagger's index, set here rather than written into the markup: a
+         list rendered from a document has nowhere to carry one, and the second
+         list is where somebody forgets. */
+      const order = (el: HTMLElement) => {
+        if (el.dataset.reveal !== 'stagger') return;
+        [...el.children].forEach((child, i) =>
+          (child as HTMLElement).style.setProperty('--i', String(i)),
+        );
+      };
+
+      if (!('IntersectionObserver' in window)) {
+        targets.forEach((el) => {
+          order(el);
+          el.classList.add('is-in');
+        });
+      } else {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              order(entry.target as HTMLElement);
+              entry.target.classList.add('is-in');
+              io.unobserve(entry.target);
+            }
+          },
+          /* Slightly inside the fold, so a block animates as it is arrived at
+             rather than a moment before. */
+          { rootMargin: '0px 0px -10% 0px' },
+        );
+        targets.forEach((el) => io.observe(el));
+      }
+    </script>
+  </body>
+</html>

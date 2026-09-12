@@ -1,0 +1,59 @@
+---
+/**
+ * A privacy page, as a starting point.
+ *
+ * ── what the platform requires, which is one line of this file ──────────────
+ *
+ * **The link, and nothing else.** The platform walks the built artifact looking
+ * for `PROCESSING_URL`, and it does not read a word around it. Everything else
+ * on this page — the sections, the wording, whether this file is used at all —
+ * belongs to the business, and grading it is neither a website builder's job
+ * nor within its competence.
+ *
+ * So this is a default and not a specification. Rewrite it, restyle it, replace
+ * it with a page written by somebody's lawyer, or put the link on a privacy
+ * page that already exists and delete this file. All of those are correct.
+ *
+ * What is not correct is dropping the link: it is the one sentence here that is
+ * about somebody other than the business, and without it nothing on the site
+ * tells a visitor who is holding what they typed.
+ *
+ * ── and it is not a wall ────────────────────────────────────────────────────
+ *
+ * A site missing this is **warned about and launched anyway**. Publishing a
+ * notice is the controller's obligation — the business's — and what makes the
+ * platform's own handling lawful is the agreement with them rather than a page
+ * here. See wiki/34: gate on our own conduct, never on somebody else's
+ * compliance. The one thing publishing does refuse is a form with nowhere to
+ * send what people write in it, which is a broken product rather than a legal
+ * opinion.
+ */
+import Layout from '../layouts/Layout.astro';
+import { PRIVACY } from '../copy/{{LOCALE}}';
+import { PROCESSING_URL } from '../content/blocks';
+---
+
+<Layout title={PRIVACY.title} description={PRIVACY.intro}>
+  <main class="prose" data-jtk-fixed>
+    <h1>{PRIVACY.title}</h1>
+    <p class="lead">{PRIVACY.intro}</p>
+
+    <h2>{PRIVACY.formTitle}</h2>
+    <p>{PRIVACY.formBody}</p>
+
+    <h2>{PRIVACY.whoTitle}</h2>
+    <p>
+      {PRIVACY.whoBody}{' '}
+      <a href={PROCESSING_URL} rel="noreferrer">{PROCESSING_URL.replace('https://', '')}</a>
+    </p>
+
+    <h2>{PRIVACY.askTitle}</h2>
+    <p>{PRIVACY.askBody}</p>
+
+    {/*
+      The business's own. Left visible rather than commented out, so that an
+      empty one is noticed before launch rather than after.
+    */}
+    <h2>{PRIVACY.ownTitle}</h2>
+  </main>
+</Layout>

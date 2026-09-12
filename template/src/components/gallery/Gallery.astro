@@ -1,0 +1,381 @@
+---
+/**
+ * The work, shown.
+ *
+ * Six arrangements, and the choice is made by the material: how much work there
+ * is, and whether it has an order. What each one is for is in ./galleries.ts
+ * and in the table in `docs/gallery.md` of @jtakeit/astro.
+ *
+ *   <Gallery arrangement="wall" items={WORK} />
+ *   <Gallery arrangement="index" items={[{ name: 'sleeve', caption: 'Forearm, two sittings' }]} />
+ *
+ * ── one of them moves, and that is a bounded exception ──────────────────────
+ *
+ * The kit's Motion rule is that nothing moves while it is being read. A wall of
+ * photographs is *looked at* rather than read, which is what makes the
+ * exception arguable at all — and it is only allowed on three conditions, all
+ * of them here rather than in a comment somewhere:
+ *
+ *   · it stops on hover and on keyboard focus, so it is still whenever anybody
+ *     is actually looking at one frame;
+ *   · reduced motion gets the wall laid out still and in full — the finished
+ *     thing, not a shorter one;
+ *   · nothing readable is inside it and nothing is positioned against it.
+ *
+ * It also declares itself: `data-motion="gallery"` marks the region as one
+ * thing that moves forever, and `fl-check` counts those regions rather than
+ * counting animated elements. A page whose hero already moves and whose wall
+ * moves too is two, and two is the number the check argues about.
+ */
+import Shot from '../Shot.astro';
+import { GALLERIES, asPieces, deal, type Arrangement, type Piece } from './galleries';
+
+interface Props {
+  /**
+   * ragged · wall · contact · strip · spread · index.
+   * Required: there is no default arrangement, because the right one is decided
+   * by how much work there is and a default would decide it by habit.
+   */
+  arrangement: Arrangement;
+  /** File names in src/assets, or `{ name, caption }` where the words matter. */
+  items: readonly (string | Piece)[];
+  /** Overrides the arrangement's own column count. */
+  columns?: number;
+  /**
+   * `wall` only: how long one full cycle takes. Long. A wall that completes in
+   * thirty seconds is a wall somebody is watching instead of reading the page.
+   */
+  cycle?: string;
+  /** `wall` only: how tall the window is. About two photographs. */
+  window?: string;
+  class?: string;
+}
+
+const { arrangement, items, columns, cycle, window: windowHeight, class: className } = Astro.props;
+
+const recipe = GALLERIES[arrangement];
+if (!recipe) {
+  throw new Error(
+    `<Gallery arrangement="${arrangement}"> is not one of: ${Object.keys(GALLERIES).join(', ')}. ` +
+      'See references/gallery.md — the arrangement is chosen from the material, not from taste.',
+  );
+}
+
+const pieces = asPieces(items);
+
+/*
+ * How much work there is decides the arrangement, so a count outside what an
+ * arrangement is for is worth saying out loud at the moment it can still be
+ * changed. It does not fail the build: a `spread` of twelve is a decision
+ * somebody may have made on purpose, and a warning in front of the person who
+ * chose it is enough.
+ */
+const [floor, ceiling] = recipe.works;
+if (pieces.length < floor || pieces.length > ceiling) {
+  console.warn(
+    `[gallery] ${arrangement} is for ${floor}–${ceiling} pieces and it has been given ${pieces.length}. ` +
+      (pieces.length < floor
+        ? 'Below that it reads as a business that has done very little — see gallery.md for the arrangement that suits a short list.'
+        : 'Above that it stops reading as one thing.'),
+  );
+}
+
+if (arrangement === 'index' && !pieces.some((p) => p.caption)) {
+  throw new Error(
+    '<Gallery arrangement="index"> is a list of work *with words beside it*, and none of these items ' +
+      'has a caption. Give them captions, or use `ragged` — an index with nothing to read is a worse ragged.',
+  );
+}
+
+const cols = Math.max(1, columns ?? recipe.columns);
+const columnsOf = arrangement === 'ragged' || arrangement === 'wall' ? deal(pieces, cols) : [];
+
+const vars = [
+  `--gallery-columns:${cols}`,
+  cycle ? `--gallery-cycle:${cycle}` : '',
+  windowHeight ? `--gallery-window:${windowHeight}` : '',
+]
+  .filter(Boolean)
+  .join(';');
+
+/** The wall runs its outer columns one way and its inner ones the other. */
+const drift = (n: number) => (n % 2 === 1 ? 'up' : 'down');
+
+const shotWidth = arrangement === 'contact' ? 420 : arrangement === 'spread' ? 1400 : 700;
+const sizes =
+  arrangement === 'spread'
+    ? '(min-width: 62rem) 70vw, 92vw'
+    : arrangement === 'contact'
+      ? '(min-width: 62rem) 16vw, 30vw'
+      : '(min-width: 62rem) 25vw, 44vw';
+---
+
+<div
+  class:list={['gallery', `gallery--${arrangement}`, className]}
+  data-arrangement={arrangement}
+  data-motion={recipe.moves ? 'gallery' : undefined}
+  style={vars}
+>
+  {
+    arrangement === 'wall' || arrangement === 'ragged' ? (
+      columnsOf.map((column, n) => (
+        <div class="gallery__col" data-drift={recipe.moves ? drift(n) : undefined}>
+          <div class="gallery__track">
+            {/*
+              A moving column is rendered twice and travels exactly half its own
+              height, which is what makes the loop seamless: the halfway point
+              is pixel-identical to the start. The second pass is the same
+              pictures saying nothing new, so it is hidden from a screen reader
+              rather than read out again.
+            */}
+            {(recipe.moves ? [0, 1] : [0]).map((pass) =>
+              column.map((piece) => (
+                <figure class="gallery__frame" aria-hidden={pass === 1 ? 'true' : undefined} data-pass={pass}>
+                  <Shot
+                    name={piece.name}
+                    alt={piece.alt}
+                    path={pass === 0 ? piece.path : undefined}
+                    decorative={pass === 1}
+                    width={shotWidth}
+                    sizes={sizes}
+                  />
+                </figure>
+              )),
+            )}
+          </div>
+        </div>
+      ))
+    ) : (
+      pieces.map((piece) => (
+        <figure class="gallery__frame">
+          <Shot
+            name={piece.name}
+            alt={piece.alt}
+            path={piece.path}
+            width={shotWidth}
+            sizes={sizes}
+            ratio={arrangement === 'contact' ? '1 / 1' : undefined}
+          />
+          {/* A caption comes from a `list` of rows rather than from a gallery
+              field — see the `index` arrangement in references/gallery.md — and
+              it is content, so it carries its own path. */}
+          {piece.caption && (
+            <figcaption class="gallery__caption" data-jtk-path={piece.captionPath}>
+              {piece.caption}
+            </figcaption>
+          )}
+        </figure>
+      ))
+    )
+  }
+</div>
+
+<style>
+  .gallery {
+    --gap: clamp(0.75rem, 1.6vw, 1.25rem);
+    margin-block-start: clamp(2rem, 4vw, 3.5rem);
+  }
+
+  .gallery__frame {
+    margin: 0;
+  }
+
+  .gallery__caption {
+    padding-block-start: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--ink-quiet);
+  }
+
+  /* ── ragged: columns, still, nothing cropped ───────────────────────────── */
+
+  .gallery--ragged,
+  .gallery--wall {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--gap);
+  }
+
+  @media (min-width: 62rem) {
+    .gallery--ragged,
+    .gallery--wall {
+      grid-template-columns: repeat(var(--gallery-columns, 3), minmax(0, 1fr));
+    }
+  }
+
+  .gallery__track {
+    display: grid;
+    align-content: start;
+    gap: var(--gap);
+  }
+
+  /*
+   * Below 62rem the last column is dropped rather than squeezed. Each column is
+   * a fair sample — the pieces are dealt, not sliced — so what goes is a third
+   * of the wall and not a period of the work.
+   */
+  @media (max-width: 61.99rem) {
+    .gallery--ragged .gallery__col:nth-child(n + 3),
+    .gallery--wall .gallery__col:nth-child(n + 3) {
+      display: none;
+    }
+  }
+
+  /* ── wall: the one that moves ──────────────────────────────────────────── */
+
+  /*
+   * A window about two photographs tall. The block is a view onto the work
+   * rather than the work laid end to end, and that is what stops a body of
+   * thirty-seven from becoming most of the page.
+   */
+  .gallery--wall {
+    block-size: var(--gallery-window, min(86svh, 52rem));
+    overflow: clip;
+  }
+
+  .gallery--wall .gallery__col {
+    min-block-size: 0;
+    overflow: clip;
+  }
+
+  /*
+   * Half the track's own height, forever. The track is the same pictures twice,
+   * so half of it is exactly one pass — the one place a percentage is the right
+   * unit, because the distance is a property of the track and not of the
+   * screen.
+   */
+  @keyframes gallery-down {
+    from {
+      transform: translate3d(0, -50%, 0);
+    }
+
+    to {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes gallery-up {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      transform: translate3d(0, -50%, 0);
+    }
+  }
+
+  /*
+   * Still whenever somebody is actually looking at one frame — and it is an
+   * inherited custom property rather than a `:hover` rule on the track, which
+   * is the version that does not work.
+   *
+   * `animation: … infinite` is a shorthand, so it resets `animation-play-state`
+   * to `running`; a `.gallery:hover .gallery__track` rule is *less* specific
+   * than the one carrying that shorthand, so the pause loses and the wall never
+   * stops. It reads as working — the wall drifts, the page looks right — and
+   * the one condition that buys this component its exception is quietly absent.
+   *
+   * A custom property set on the hovered ancestor inherits down and is read
+   * after the shorthand in the same declaration, so specificity never enters
+   * into it.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    .gallery--wall .gallery__col[data-drift='down'] .gallery__track {
+      animation: gallery-down var(--gallery-cycle, 150s) linear infinite;
+      animation-play-state: var(--gallery-play, running);
+      will-change: transform;
+    }
+
+    .gallery--wall .gallery__col[data-drift='up'] .gallery__track {
+      animation: gallery-up var(--gallery-cycle, 150s) linear infinite;
+      animation-play-state: var(--gallery-play, running);
+      will-change: transform;
+    }
+
+    .gallery--wall:hover,
+    .gallery--wall:focus-within {
+      --gallery-play: paused;
+    }
+  }
+
+  /*
+   * Reduced motion gets the whole wall, laid out and still: the window opens,
+   * the animation never starts, and the second pass — which exists only to make
+   * a loop seamless — is not shown, because with nothing moving it would simply
+   * be every photograph twice.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .gallery--wall {
+      block-size: auto;
+      overflow: visible;
+    }
+
+    .gallery--wall .gallery__frame[data-pass='1'] {
+      display: none;
+    }
+  }
+
+  /* ── contact: dense, uniform, many ─────────────────────────────────────── */
+
+  .gallery--contact {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(7.5rem, 30vw), 1fr));
+    gap: calc(var(--gap) * 0.6);
+  }
+
+  /* ── strip: one row, moved by the visitor ──────────────────────────────── */
+
+  /*
+   * It scrolls inside its own container and never takes the page with it, which
+   * is the difference between a rail that is allowed and one that is not.
+   * Snapping is what makes a drag land on a picture rather than between two.
+   */
+  .gallery--strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: min(22rem, 78vw);
+    gap: var(--gap);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory;
+    padding-block-end: 0.5rem;
+  }
+
+  .gallery--strip .gallery__frame {
+    scroll-snap-align: start;
+  }
+
+  /* ── spread: a few, large ──────────────────────────────────────────────── */
+
+  .gallery--spread {
+    display: grid;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+
+  /* ── index: rows with words ────────────────────────────────────────────── */
+
+  .gallery--index {
+    display: grid;
+    gap: clamp(1rem, 2.5vw, 2rem);
+  }
+
+  .gallery--index .gallery__frame {
+    display: grid;
+    grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+    gap: clamp(1rem, 3vw, 2rem);
+    align-items: start;
+    padding-block-end: clamp(1rem, 2.5vw, 2rem);
+    border-block-end: 1px solid var(--line);
+  }
+
+  @media (min-width: 48rem) {
+    .gallery--index .gallery__frame {
+      grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+    }
+  }
+
+  .gallery--index .gallery__caption {
+    padding-block-start: 0;
+    font-size: 1rem;
+  }
+</style>

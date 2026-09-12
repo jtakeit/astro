@@ -1,0 +1,151 @@
+---
+/**
+ * The page's sections, rendered from the content document.
+ *
+ * ── why this is one component and not eleven ────────────────────────────────
+ *
+ * It is the starting point, not the design. A generated site arrives with a
+ * shape somebody chose — hero, then the person, then what they do, then the
+ * questions — and something has to render it before anybody can look at it.
+ * This renders every type the catalogue has, in the document's order, correctly
+ * annotated, with no opinion beyond a sensible heading level and some air.
+ *
+ * The design pass replaces it. That is the intended path: split it, restyle it,
+ * give a type its own component when it earns one. What must survive any of
+ * that is the annotation — every element whose text comes from content carries
+ * `data-jtk-path`, and `annotation-lint.mjs` fails the build without it, because
+ * an element that loses its path stops opening the editor *silently*.
+ *
+ * Repeats are ordinary. Two feature grids and three prose sections is a normal
+ * landing page, which is why this walks the document rather than looking blocks
+ * up by name.
+ */
+import { PAGE, pathAt } from '../copy/{{LOCALE}}';
+import LeadForm from './LeadForm.astro';
+import design from '../../jtk/design.json';
+
+/*
+ * The edge and the entrance, out of the design document rather than typed here.
+ * Both are attributes, so a block that has neither is exactly the block it was
+ * — and a design pass that replaces this component keeps them by keeping two
+ * attributes. `docs/surface.md` of @jtakeit/astro.
+ *
+ * `stagger` is the one that does not go on the section: it sequences a
+ * container's children, and the container worth sequencing is the grid, not the
+ * heading above it.
+ *
+ * The band immediately under the hero gets no entrance. On a phone, and on any
+ * page whose hero is not a full screen, that band is *in* the first screen —
+ * and an entrance above the fold delays the largest paint and shows an empty
+ * page on a slow line. `fl-check` fails on it; this is the default that does
+ * not walk into it.
+ */
+const surface = design.surface ?? { edge: '', reveal: '' };
+const staggered = surface.reveal === 'stagger';
+const reveal = (surface.reveal && !staggered ? surface.reveal : undefined) as string | undefined;
+const edge = (surface.edge || undefined) as string | undefined;
+
+/**
+ * Which block the page rendered as its first screen — and only that one is
+ * skipped here.
+ *
+ * Skipping *every* hero was how a document with two of them lost one: the page
+ * renders the first, this dropped both, and the second block's text reached no
+ * markup at all — so it carried no `data-jtk-path`, and `annotation-lint` failed
+ * the build on fields nobody could see were missing. The generator will not
+ * produce a second hero any more; a template that silently swallows one is still
+ * the wrong template.
+ */
+const rendered = PAGE.findIndex((of) => of.type === 'hero');
+
+/** The band under the hero: the one that is in the first screen on a phone. */
+const first = PAGE.findIndex((_, at) => at !== rendered);
+const arrives = (at: number) => (at === first ? undefined : reveal);
+
+const str = (of: Record<string, unknown>, key: string): string => (of[key] as string) ?? '';
+const rows = (of: Record<string, unknown>, key: string): Record<string, unknown>[] =>
+  (of[key] as Record<string, unknown>[]) ?? [];
+---
+
+{
+  PAGE.map((of, at) => {
+    const type = of.type;
+
+    if (at === rendered) return null; // the first screen is the page's own
+
+    // A block that carries the form does not also render its own heading and
+    // button: `LeadForm` renders both, from this same block, and annotating a
+    // field twice means two elements claiming one path.
+    const carriesForm = of.form === true;
+
+    return (
+      <section
+        class={`band band--${type}`}
+        id={carriesForm || at === PAGE.length - 1 ? 'contact' : undefined}
+        data-reveal={arrives(at)}
+      >
+        <div class="band__inner">
+          {str(of, 'eyebrow') && (
+            <p class="eyebrow" data-jtk-path={pathAt(at, 'eyebrow')}>{str(of, 'eyebrow')}</p>
+          )}
+          {!carriesForm && str(of, 'title') && (
+            <h2 data-jtk-path={pathAt(at, 'title')}>{str(of, 'title')}</h2>
+          )}
+          {str(of, 'name') && (
+            <h2 data-jtk-path={pathAt(at, 'name')}>{str(of, 'name')}</h2>
+          )}
+          {str(of, 'role') && (
+            <p class="quiet" data-jtk-path={pathAt(at, 'role')}>{str(of, 'role')}</p>
+          )}
+          {!carriesForm && str(of, 'lead') && (
+            <p class="lead" data-jtk-path={pathAt(at, 'lead')}>{str(of, 'lead')}</p>
+          )}
+          {str(of, 'body') && (
+            <div class="prose" data-jtk-path={pathAt(at, 'body')} set:html={str(of, 'body')} />
+          )}
+          {str(of, 'bio') && (
+            <p class="prose" data-jtk-path={pathAt(at, 'bio')}>{str(of, 'bio')}</p>
+          )}
+
+          {rows(of, 'items').length > 0 && (
+            <ul class="items" data-reveal={staggered && at !== first ? 'stagger' : undefined}>
+              {rows(of, 'items').map((item, i) => (
+                <li class="item" data-edge={edge}>
+                  {str(item, 'title') && (
+                    <h3 data-jtk-path={pathAt(at, 'items', i, 'title')}>{str(item, 'title')}</h3>
+                  )}
+                  {str(item, 'question') && (
+                    <h3 data-jtk-path={pathAt(at, 'items', i, 'question')}>{str(item, 'question')}</h3>
+                  )}
+                  {str(item, 'text') && (
+                    <p data-jtk-path={pathAt(at, 'items', i, 'text')}>{str(item, 'text')}</p>
+                  )}
+                  {str(item, 'answer') && (
+                    <p data-jtk-path={pathAt(at, 'items', i, 'answer')}>{str(item, 'answer')}</p>
+                  )}
+                  {str(item, 'label') && (
+                    <p data-jtk-path={pathAt(at, 'items', i, 'label')}>{str(item, 'label')}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!carriesForm && str(of, 'cta_label') && (
+            <p class="actions">
+              <a
+                class="btn"
+                href={str(of, 'cta_href') || '#contact'}
+                data-jtk-path={pathAt(at, 'cta_label')}
+              >
+                {str(of, 'cta_label')}
+              </a>
+            </p>
+          )}
+
+          {carriesForm && <LeadForm />}
+        </div>
+      </section>
+    );
+  })
+}

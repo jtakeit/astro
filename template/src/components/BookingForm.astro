@@ -1,0 +1,506 @@
+---
+/**
+ * The booking form.
+ *
+ * The rules — when the business is open, how long a slot is, whether a time
+ * is still free, what it costs — live in one place, and it is not here: the
+ * platform serves six addresses on the site's own host and this component
+ * draws what they answer. Nothing about availability is computed on the page,
+ * and nothing about the visitor's choice is trusted by the server.
+ *
+ *   GET  /api/turnstile             the widget's key, or "" for none
+ *   GET  /api/availability?service=…&from=…&to=…[&resource=…]
+ *   POST /api/book                  → { id, state, amount_minor, currency, token, manage_path, telegram_url }
+ *   POST /api/pay                   → { url } — only when amount_minor > 0
+ *
+ * The visitor's own page — cancel, move, add to calendar — is served by the
+ * platform at `manage_path`; this form only has to link to it.
+ *
+ * ── what the page passes in ─────────────────────────────────────────────────
+ *
+ * The services and the resources are collection entries the owner edits, so
+ * they arrive as props from the page that reads the collections. Slugs are
+ * what the platform books against; titles are what the visitor reads.
+ *
+ * ── with JavaScript off ─────────────────────────────────────────────────────
+ *
+ * A booking cannot be made without a script — the free times are fetched — so
+ * with scripts off this shows the contact details and the sentence in
+ * `copy.noScript`, and nothing pretends otherwise.
+ */
+import { under } from '../lib/under';
+
+interface Named {
+  slug: string;
+  title: string;
+  /** Minutes and minor units, for the running total when several are picked. */
+  takes?: number;
+  costs?: number;
+  /** A heading the services are listed under, where the catalogue groups them. */
+  group?: string;
+}
+
+interface Props {
+  services: Named[];
+  /** Empty for a solo business: the platform assigns. */
+  resources?: Named[];
+  /** The site's locale — decides the words. */
+  locale: 'uk' | 'de' | 'en';
+  /** How many days ahead the picker offers. The platform clamps to its own horizon. */
+  daysAhead?: number;
+  /**
+   * Whether a visitor may pick several services for one visit — the module's
+   * `combine` setting, read from `jtk/bookings.json`. On, the services are a
+   * checklist with a running total; off, one choice. The platform holds the
+   * same rule, so a form that lies here is refused there.
+   */
+  combine?: boolean;
+  /** The site's currency, for the running total. */
+  currency?: string;
+}
+
+const { services, resources = [], locale, daysAhead = 30, combine = false, currency = 'CHF' } = Astro.props;
+
+// The checklist's runs, in the order the services came, each heading once.
+const runs: { group: string; items: Named[] }[] = [];
+for (const one of services) {
+  const group = one.group ?? '';
+  const run = runs.find((r) => r.group === group);
+  if (run) run.items.push(one);
+  else runs.push({ group, items: [one] });
+}
+
+const WORDS = {
+  uk: {
+    service: 'Послуга', services: 'Послуги', total: 'Разом', pickService: 'Оберіть хоча б одну послугу.', resource: 'Майстер', any: 'Будь-хто', day: 'День', time: 'Час',
+    name: "Ім'я", phone: 'Телефон', email: 'Електронна пошта', note: 'Коментар',
+    book: 'Записатися', sending: 'Записуємо…', none: 'У цей день вільного часу немає.',
+    pick: 'Оберіть день', confirmed: 'Ви записані.', pending: 'Запис отримано — ми підтвердимо його найближчим часом.',
+    pay: 'Оплатити', payNote: 'Час зарезервовано на 30 хвилин. Щоб закріпити його, завершіть оплату.',
+    manage: 'Скасувати або перенести запис', telegram: 'Нагадування в Telegram',
+    taken: 'Цей час щойно зайняли — оберіть інший.', failed: 'Не вдалося записатися. Спробуйте ще раз або зателефонуйте.',
+    party: 'Скільки вас', challenge: 'Підтвердіть, що ви не робот, і спробуйте ще раз.', tooMany: 'У вас уже є кілька відкритих записів. Скасуйте один із них або зателефонуйте нам.',
+    needContact: 'Вкажіть телефон або пошту, щоб ми могли з вами звʼязатися.', noScript: 'Щоб записатися онлайн, увімкніть JavaScript — або зателефонуйте нам.',
+  },
+  de: {
+    service: 'Leistung', services: 'Leistungen', total: 'Zusammen', pickService: 'Bitte mindestens eine Leistung wählen.', resource: 'Bei', any: 'Egal wer', day: 'Tag', time: 'Uhrzeit',
+    name: 'Name', phone: 'Telefon', email: 'E-Mail', note: 'Bemerkung',
+    book: 'Termin buchen', sending: 'Wird gebucht…', none: 'An diesem Tag ist nichts frei.',
+    pick: 'Wählen Sie einen Tag', confirmed: 'Ihr Termin ist gebucht.', pending: 'Anfrage erhalten — wir bestätigen den Termin in Kürze.',
+    pay: 'Jetzt bezahlen', payNote: 'Der Termin ist 30 Minuten reserviert. Schliessen Sie die Zahlung ab, um ihn zu behalten.',
+    manage: 'Termin absagen oder verschieben', telegram: 'Erinnerungen per Telegram',
+    taken: 'Diese Zeit wurde gerade vergeben — bitte wählen Sie eine andere.', failed: 'Die Buchung hat nicht geklappt. Bitte erneut versuchen oder anrufen.',
+    party: 'Wie viele Personen', challenge: 'Bitte bestätigen Sie, dass Sie kein Roboter sind, und versuchen Sie es erneut.', tooMany: 'Sie haben bereits mehrere offene Termine. Sagen Sie einen ab oder rufen Sie uns an.',
+    needContact: 'Bitte Telefon oder E-Mail angeben, damit wir Sie erreichen können.', noScript: 'Für die Online-Buchung ist JavaScript nötig — oder rufen Sie uns an.',
+  },
+  en: {
+    service: 'Service', services: 'Services', total: 'Total', pickService: 'Pick at least one service.', resource: 'With', any: 'Anyone', day: 'Day', time: 'Time',
+    name: 'Name', phone: 'Phone', email: 'Email', note: 'Note',
+    book: 'Book', sending: 'Booking…', none: 'Nothing is free on that day.',
+    pick: 'Choose a day', confirmed: 'You are booked.', pending: 'Received — we will confirm shortly.',
+    pay: 'Pay now', payNote: 'The time is held for 30 minutes. Complete the payment to keep it.',
+    manage: 'Cancel or move the booking', telegram: 'Reminders in Telegram',
+    taken: 'That time has just been taken — please choose another.', failed: 'That did not work. Please try again or ring us.',
+    party: 'How many of you', challenge: 'Please confirm you are not a robot and try again.', tooMany: 'You already have several open bookings. Cancel one, or ring us.',
+    needContact: 'Leave a phone number or an email so we can reach you.', noScript: 'Booking online needs JavaScript — or ring us.',
+  },
+}[locale];
+
+const today = new Date().toISOString().slice(0, 10);
+const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
+---
+
+<form
+  class="booking"
+  data-booking
+  data-currency={currency}
+  data-words={JSON.stringify(WORDS)}
+  data-api={under('/api/')}
+  novalidate
+>
+  <noscript><p class="booking__note">{WORDS.noScript}</p></noscript>
+
+  <div class="field">
+    {combine ? (
+      <fieldset class="booking__services" data-services>
+        <legend class="field__label">{WORDS.services}</legend>
+        {runs.map((run) => (
+          <div class="booking__run">
+            {run.group !== '' && <p class="booking__run-title">{run.group}</p>}
+            {run.items.map((one) => (
+              <label class="booking__service">
+                <input type="checkbox" name="service" value={one.slug} data-takes={one.takes ?? 0} data-costs={one.costs ?? 0} />
+                <span class="booking__service-name">{one.title}</span>
+                <span class="booking__service-meta">
+                  {one.takes ? `${one.takes} min` : ''}
+                  {one.costs ? ` · ${new Intl.NumberFormat(locale === 'de' ? 'de-CH' : locale === 'uk' ? 'uk-UA' : 'en', { style: 'currency', currency }).format(one.costs / 100)}` : ''}
+                </span>
+              </label>
+            ))}
+          </div>
+        ))}
+        <p class="booking__total" data-total hidden></p>
+      </fieldset>
+    ) : (
+      <>
+        <label class="field__label" for="booking-service">{WORDS.service}</label>
+        <select class="field__input" id="booking-service" name="service" required>
+          {services.map((one) => <option value={one.slug}>{one.title}</option>)}
+        </select>
+      </>
+    )}
+  </div>
+
+  {resources.length > 1 && (
+    <div class="field">
+      <label class="field__label" for="booking-resource">{WORDS.resource}</label>
+      <select class="field__input" id="booking-resource" name="resource">
+        <option value="">{WORDS.any}</option>
+        {resources.map((one) => <option value={one.slug}>{one.title}</option>)}
+      </select>
+    </div>
+  )}
+
+  <div class="field">
+    <label class="field__label" for="booking-day">{WORDS.day}</label>
+    <input class="field__input" id="booking-day" name="day" type="date" min={today} max={last} required />
+  </div>
+
+  {/* How many, shown only once availability has said the site takes a party
+      (party_max > 0): a salon never asks, a restaurant and a class do. The
+      options are filled from that answer rather than from the build, because
+      the largest party is the owner's setting and not the template's. */}
+  <div class="field" data-party-field hidden>
+    <label class="field__label" for="booking-party">{WORDS.party}</label>
+    <select class="field__input" id="booking-party" name="party"></select>
+  </div>
+
+  <fieldset class="field booking__times" data-times>
+    <legend class="field__label">{WORDS.time}</legend>
+    <p class="booking__hint" data-times-hint>{WORDS.pick}</p>
+    <div class="booking__slots" data-slots></div>
+  </fieldset>
+
+  <div class="field">
+    <label class="field__label" for="booking-name">{WORDS.name} <span aria-hidden="true">*</span></label>
+    <input class="field__input" id="booking-name" name="name" type="text" autocomplete="name" required maxlength="120" />
+  </div>
+  <div class="field">
+    <label class="field__label" for="booking-phone">{WORDS.phone}</label>
+    <input class="field__input" id="booking-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="40" />
+  </div>
+  <div class="field">
+    <label class="field__label" for="booking-email">{WORDS.email}</label>
+    <input class="field__input" id="booking-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="120" />
+  </div>
+  <div class="field">
+    <label class="field__label" for="booking-note">{WORDS.note}</label>
+    <textarea class="field__input field__input--area" id="booking-note" name="note" rows="3" maxlength="2000"></textarea>
+  </div>
+
+  {/* Turnstile renders here when /api/turnstile hands the page a key. */}
+  <div class="booking__challenge" data-challenge hidden></div>
+
+  <p class="field__error" data-booking-error hidden></p>
+
+  <button class="booking__submit" type="submit" data-submit>{WORDS.book}</button>
+
+  <div class="booking__done" data-done hidden>
+    <p class="booking__done-line" data-done-line></p>
+    <p class="booking__done-when" data-done-when></p>
+    <p class="booking__note" data-pay-note hidden></p>
+    <p class="booking__links">
+      <a data-pay hidden></a>
+      <a data-manage hidden></a>
+      <a data-telegram hidden target="_blank" rel="noreferrer noopener"></a>
+    </p>
+  </div>
+</form>
+
+<script>
+  /**
+   * The whole client. No framework, one form, one fetch per question.
+   *
+   * Every rule enforced here is enforced again by the platform — the browser's
+   * checks are a convenience, never a gate — so the script's only jobs are to
+   * fetch the free times, to render the widget it is told to, and to say
+   * plainly what the platform answered.
+   */
+  type Words = Record<string, string>;
+  type Slot = { start: string; free: string[] };
+
+  declare global {
+    interface Window {
+      turnstile?: {
+        render: (el: HTMLElement, opts: { sitekey: string; callback: (token: string) => void; 'expired-callback'?: () => void }) => string;
+        reset: (id?: string) => void;
+      };
+    }
+  }
+
+  for (const form of document.querySelectorAll<HTMLFormElement>('[data-booking]')) {
+    wire(form);
+  }
+
+  function wire(form: HTMLFormElement): void {
+    const words = JSON.parse(form.dataset.words ?? '{}') as Words;
+    const api = form.dataset.api ?? '/api/';
+    const q = <T extends HTMLElement>(sel: string) => form.querySelector<T>(sel)!;
+
+    // One select, or a checklist: what is chosen is a list either way.
+    const select = form.querySelector<HTMLSelectElement>('select[name=service]');
+    const boxes = [...form.querySelectorAll<HTMLInputElement>('input[type=checkbox][name=service]')];
+    const total = form.querySelector<HTMLElement>('[data-total]');
+    const picked = (): string[] =>
+      select ? (select.value ? [select.value] : []) : boxes.filter((b) => b.checked).map((b) => b.value);
+    function showTotal(): void {
+      if (!total) return;
+      const chosenBoxes = boxes.filter((b) => b.checked);
+      if (chosenBoxes.length < 2) { total.hidden = true; return; }
+      const minutes = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.takes ?? 0), 0);
+      const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0), 0);
+      const money = minor > 0
+        ? ' · ' + new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: form.dataset.currency || 'CHF' }).format(minor / 100)
+        : '';
+      total.textContent = `${words.total}: ${minutes} min${money}`;
+      total.hidden = false;
+    }
+    const resource = form.querySelector<HTMLSelectElement>('[name=resource]');
+    const party = q<HTMLSelectElement>('[name=party]');
+    const partyField = q<HTMLElement>('[data-party-field]');
+    const day = q<HTMLInputElement>('[name=day]');
+    const slots = q<HTMLElement>('[data-slots]');
+    const hint = q<HTMLElement>('[data-times-hint]');
+    const error = q<HTMLElement>('[data-booking-error]');
+    const submit = q<HTMLButtonElement>('[data-submit]');
+    const challenge = q<HTMLElement>('[data-challenge]');
+
+    let chosen: string | null = null;
+    let zone = '';
+    let turnstileToken = '';
+
+    // The widget, if this host has one. Asked at runtime so the site carries
+    // no key: which widget covers a host is the platform's to decide.
+    void fetch(api + 'turnstile', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data: { sitekey?: string }) => {
+        if (!data.sitekey) return;
+        challenge.hidden = false;
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.onload = () => {
+          window.turnstile?.render(challenge, {
+            sitekey: data.sitekey!,
+            callback: (token) => { turnstileToken = token; },
+            'expired-callback': () => { turnstileToken = ''; },
+          });
+        };
+        document.head.appendChild(script);
+      })
+      .catch(() => undefined);
+
+    // The party control appears the first time the platform says how large a
+    // party may be, and asks again when it changes.
+    function offerParty(most: number): void {
+      if (most <= 1) { partyField.hidden = true; return; }
+      if (party.options.length !== most) {
+        const was = party.value;
+        party.textContent = '';
+        for (let n = 1; n <= most; n++) {
+          const option = document.createElement('option');
+          option.value = String(n);
+          option.textContent = String(n);
+          party.appendChild(option);
+        }
+        party.value = was && Number(was) <= most ? was : '1';
+      }
+      if (partyField.hidden) {
+        partyField.hidden = false;
+        party.addEventListener('change', () => void load());
+      }
+    }
+
+    function say(text: string): void {
+      error.textContent = text;
+      error.hidden = text === '';
+    }
+
+    // A refusal as a sentence in the visitor's language. The platform answers
+    // with a JSON body — `{"error":"challenge"}` — or with a line of prose;
+    // neither is for a visitor to read as it came, and a sweep once found the
+    // JSON printed between the form and its button.
+    async function reason(answer: Response): Promise<string> {
+      let body = '';
+      try { body = await answer.text(); } catch { /* nothing to read */ }
+      let code = '';
+      try { code = String((JSON.parse(body) as { error?: string }).error ?? ''); } catch { /* prose */ }
+      if (answer.status === 403 || code === 'challenge') return words.challenge;
+      if (answer.status === 429) return words.tooMany;
+      if (answer.status === 409) return words.taken;
+      return words.failed;
+    }
+
+    function clock(iso: string): string {
+      try {
+        return new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
+          hour: '2-digit', minute: '2-digit', timeZone: zone || undefined,
+        }).format(new Date(iso));
+      } catch {
+        return iso.slice(11, 16);
+      }
+    }
+
+    async function load(): Promise<void> {
+      chosen = null;
+      slots.textContent = '';
+      if (!day.value || picked().length === 0) return;
+      hint.textContent = '…';
+
+      const from = new Date(day.value + 'T00:00:00');
+      const to = new Date(from);
+      to.setDate(to.getDate() + 1);
+      const params = new URLSearchParams({
+        from: from.toISOString(),
+        to: to.toISOString(),
+      });
+      for (const slug of picked()) params.append('service', slug);
+      if (resource?.value) params.set('resource', resource.value);
+      if (!partyField.hidden && party.value) params.set('party', party.value);
+
+      try {
+        const answer = await fetch(api + 'availability?' + params.toString(), { cache: 'no-store' });
+        if (!answer.ok) throw new Error(await answer.text());
+        const data = (await answer.json()) as { zone: string; slots: Slot[]; party_max?: number };
+        zone = data.zone;
+        offerParty(data.party_max ?? 0);
+        if (data.slots.length === 0) {
+          hint.textContent = words.none;
+          return;
+        }
+        hint.textContent = '';
+        for (const slot of data.slots) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'booking__slot';
+          button.textContent = clock(slot.start);
+          button.addEventListener('click', () => {
+            chosen = slot.start;
+            for (const other of slots.querySelectorAll('.booking__slot')) other.classList.remove('is-chosen');
+            button.classList.add('is-chosen');
+            say('');
+          });
+          slots.appendChild(button);
+        }
+      } catch (err) {
+        hint.textContent = err instanceof Error && err.message ? err.message : words.failed;
+      }
+    }
+
+    select?.addEventListener('change', () => void load());
+    for (const box of boxes) box.addEventListener('change', () => { showTotal(); void load(); });
+    resource?.addEventListener('change', () => void load());
+    day.addEventListener('change', () => void load());
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      say('');
+      const data = new FormData(form);
+      const name = String(data.get('name') ?? '').trim();
+      const phone = String(data.get('phone') ?? '').trim();
+      const email = String(data.get('email') ?? '').trim();
+      if (picked().length === 0) { say(words.pickService); return; }
+      if (!chosen) { say(words.pick); return; }
+      if (name === '') { q<HTMLInputElement>('[name=name]').focus(); return; }
+      if (phone === '' && email === '') { say(words.needContact); return; }
+
+      submit.disabled = true;
+      submit.textContent = words.sending;
+      try {
+        const answer = await fetch(api + 'book', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            service: picked()[0],
+            services: picked(),
+            resource: resource?.value ?? '',
+            party: partyField.hidden ? 1 : Number(party.value) || 1,
+            start: chosen,
+            name, phone, email,
+            note: String(data.get('note') ?? ''),
+            turnstile: turnstileToken,
+          }),
+        });
+        if (answer.status === 409) { say(words.taken); await load(); return; }
+        if (!answer.ok) { say(await reason(answer)); return; }
+        const made = (await answer.json()) as {
+          state: string; start: string; ends: string; amount_minor: number; currency: string;
+          id: string; manage_path: string; telegram_url: string;
+        };
+        done(made);
+      } catch {
+        say(words.failed);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = words.book;
+        window.turnstile?.reset();
+        turnstileToken = '';
+      }
+    });
+
+    function done(made: { state: string; start: string; ends: string; amount_minor: number; currency: string; id: string; manage_path: string; telegram_url: string }): void {
+      for (const el of form.querySelectorAll<HTMLElement>('.field, .booking__times, .booking__services, [data-submit], [data-challenge]')) el.hidden = true;
+      const box = q<HTMLElement>('[data-done]');
+      box.hidden = false;
+      q<HTMLElement>('[data-done-line]').textContent = made.state === 'confirmed' ? words.confirmed : words.pending;
+      q<HTMLElement>('[data-done-when]').textContent = `${new Intl.DateTimeFormat(document.documentElement.lang || 'en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }).format(new Date(made.start))}, ${clock(made.start)}–${clock(made.ends)}`;
+
+      const manage = q<HTMLAnchorElement>('[data-manage]');
+      if (made.manage_path) { manage.href = made.manage_path; manage.textContent = words.manage; manage.hidden = false; }
+      const tg = q<HTMLAnchorElement>('[data-telegram]');
+      if (made.telegram_url) { tg.href = made.telegram_url; tg.textContent = words.telegram; tg.hidden = false; }
+
+      if (made.amount_minor > 0) {
+        const note = q<HTMLElement>('[data-pay-note]');
+        note.textContent = words.payNote;
+        note.hidden = false;
+        const pay = q<HTMLAnchorElement>('[data-pay]');
+        pay.textContent = `${words.pay} · ${new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: made.currency.toUpperCase() }).format(made.amount_minor / 100)}`;
+        pay.href = '#';
+        pay.hidden = false;
+        pay.addEventListener('click', async (event) => {
+          event.preventDefault();
+          const answer = await fetch(api + 'pay', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ booking: made.id, return: made.manage_path || '/' }),
+          });
+          if (!answer.ok) { say(await reason(answer)); return; }
+          const { url } = (await answer.json()) as { url: string };
+          window.location.href = url;
+        });
+      }
+    }
+  }
+</script>
+
+<style>
+  .booking { display: grid; gap: var(--space-4, 1rem); max-width: 34rem; }
+  .booking__times { border: 0; padding: 0; margin: 0; }
+  .booking__services { border: 0; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+  .booking__run { display: grid; gap: 0.35rem; }
+  .booking__run-title { margin: 0.5rem 0 0.15rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+  .booking__service { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: baseline; padding: 0.45rem 0; border-block-end: 1px solid var(--line, #e5e1d8); cursor: pointer; }
+  .booking__service-meta { font-size: 0.85em; opacity: 0.7; white-space: nowrap; }
+  .booking__total { margin: 0.25rem 0 0; font-weight: 600; }
+  .booking__slots { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .booking__slot {
+    font: inherit; padding: 0.45rem 0.75rem; border-radius: var(--radius-sm, 0.5rem);
+    border: 1px solid var(--color-line, currentColor); background: transparent; color: inherit; cursor: pointer;
+  }
+  .booking__slot.is-chosen { background: var(--color-ink, #111); color: var(--color-bg, #fff); border-color: var(--color-ink, #111); }
+  .booking__hint, .booking__note { margin: 0; opacity: 0.75; }
+  .booking__links { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin: 0; }
+  .booking__done-line { font-weight: 600; margin: 0; }
+  .booking__done-when { margin: 0; }
+</style>

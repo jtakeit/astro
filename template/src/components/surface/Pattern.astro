@@ -1,0 +1,278 @@
+---
+/**
+ * The page's ground.
+ *
+ * One decorative layer behind the content, printed in the variant's own tokens.
+ * It is the opposite trade from `HeroField`: no canvas, no JavaScript, nothing
+ * that can lose a context, and it is meant to be *quiet*. The hero is where a
+ * page spends its one loud moment; this is the paper the rest of it is printed
+ * on, and a ground somebody notices is a ground turned up too far.
+ *
+ *   <Pattern pattern="rules" scope="page" />
+ *   <Pattern pattern="construction" opacity={0.05} draw />
+ *   <Pattern pattern="motif"><path d="…" /></Pattern>
+ *
+ * Six grounds ship and they are not six skins of one look — pick from the
+ * design, not by taste. What each one is for is in the table in
+ * `docs/surface.md` of @jtakeit/astro; the figures themselves are in
+ * ./patterns.ts. The seventh choice is **none**, and it is a real one: on a
+ * page carrying strong photographs it is usually the right answer. It is made
+ * by not rendering this component — `jtk/design.json` leaves
+ * `surface.pattern` empty and nothing appears.
+ *
+ * ── it fails to nothing ─────────────────────────────────────────────────────
+ *
+ * No JavaScript, no mask support, a printer, reduced motion: every one of them
+ * ends at the plain token ground, which is a design somebody chose rather than
+ * a hole in the page. Nothing readable is ever inside this layer, nothing is
+ * ever positioned against it, and it is never the LCP element.
+ */
+import { STENCILS, DRAWINGS, DEFAULTS, isStencil, nextMotifId, type Pattern } from './patterns';
+
+interface Props {
+  /**
+   * grain · rules · hatch · contour · construction · motif.
+   * Required: there is no sensible default ground, and a default is exactly how
+   * fifty sites end up sharing one. Choosing *none* means not rendering this.
+   */
+  pattern: Pattern;
+  /**
+   * `page` pins one layer behind the whole document; `block` fills the section
+   * it sits in — that section needs `class="has-pattern"`, which is the two
+   * properties the layer has to sit under content rather than over it.
+   *
+   * A page-scope ground is only visible through sections that let it through.
+   * On a stack of full-bleed bands with their own backgrounds, half of them
+   * cover it — use `block` there, on the sections that should carry it.
+   */
+  scope?: 'page' | 'block';
+  /** The figure's pitch: line spacing, hatch gap, motif tile. Any CSS length. */
+  size?: string;
+  /** Stroke weight. Any CSS length. */
+  weight?: string;
+  /**
+   * The volume knob, and the property most likely to be set too high. A ground
+   * that competes with body text makes the page harder to read for everyone who
+   * did not choose it, so `fl-check` measures this one rather than leaving it
+   * to taste.
+   */
+  opacity?: number;
+  /** What the ground is printed in. A token, not a colour. */
+  ink?: string;
+  /**
+   * Let a drawn ground set itself out once, in order, and then stop. Ignored by
+   * the stencils — a texture has no beginning. Reduced motion gets the finished
+   * drawing, never a missing one.
+   */
+  draw?: boolean;
+  class?: string;
+}
+
+const {
+  pattern,
+  scope = 'block',
+  size,
+  weight,
+  opacity,
+  ink,
+  draw = false,
+  class: className,
+} = Astro.props;
+
+/*
+ * `motif` is the ground that carries the client's own mark — their tile, their
+ * fabric, their stamp, the shape off their sign — and it is the one entry in
+ * the catalogue that cannot be filled in from a catalogue. Empty, it would
+ * render an invisible layer that looks like it works, so it fails the build
+ * instead, the way `HeroField` fails without a palette.
+ */
+if (pattern === 'motif' && !Astro.slots.has('default')) {
+  throw new Error(
+    '<Pattern pattern="motif"> needs the mark itself as its content — one SVG figure ' +
+      "taken from this business's own material. See references/surface.md; the other " +
+      'five grounds are chosen from the catalogue, this one is not.',
+  );
+}
+
+const base = DEFAULTS[pattern];
+const stencil = isStencil(pattern) ? STENCILS[pattern] : null;
+const drawing = pattern === 'motif' ? null : DRAWINGS[pattern as keyof typeof DRAWINGS];
+
+/*
+ * The geometry lives on the layer rather than on :root, because the same token
+ * name means a 180px noise tile to one ground and a 14px hatch gap to another —
+ * one shared value would put at least one of them in the wrong place. A variant
+ * retunes a ground per breakpoint by targeting `.pattern`, which is also where
+ * it can drop the pitch on a phone.
+ */
+const vars = [
+  `--pattern-size:${size ?? base.size}`,
+  `--pattern-weight:${weight ?? base.weight}`,
+  `--pattern-opacity:${opacity ?? base.opacity}`,
+  ink ? `--pattern-ink:${ink}` : '',
+  stencil ? `--pattern-stencil:${stencil}` : '',
+]
+  .filter(Boolean)
+  .join(';');
+
+/* Its own tile, in user units: an SVG <pattern> takes a number, not a token. */
+const tile = pattern === 'motif' ? Math.max(1, parseFloat(size ?? base.size) || 96) : 0;
+const motifId = pattern === 'motif' ? nextMotifId() : '';
+---
+
+<div
+  class:list={['pattern', `pattern--${scope}`, className]}
+  data-pattern={pattern}
+  data-draw={draw && !stencil ? '' : undefined}
+  style={vars}
+  aria-hidden="true"
+>
+  {
+    stencil ? (
+      <div class="pattern__stencil" />
+    ) : pattern === 'motif' ? (
+      <svg class="pattern__drawing" aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id={motifId} width={tile} height={tile} patternUnits="userSpaceOnUse">
+            <slot />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${motifId})`} />
+      </svg>
+    ) : (
+      <svg
+        class="pattern__drawing"
+        viewBox={drawing?.viewBox}
+        preserveAspectRatio="xMidYMid slice"
+        fill="none"
+        stroke="currentColor"
+        aria-hidden="true"
+        focusable="false"
+        set:html={drawing?.markup}
+      />
+    )
+  }
+</div>
+
+<style>
+  .pattern {
+    pointer-events: none;
+    color: var(--pattern-ink, var(--ink, #000));
+  }
+
+  /*
+   * Behind the document. A fixed layer costs one composited surface and does
+   * not repaint on scroll, which is why the page ground is fixed rather than a
+   * tall repeating image: the same picture for a tenth of the work.
+   */
+  .pattern--page {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+  }
+
+  /*
+   * Inside its section. `z-index: -1` puts it above that section's background
+   * and below its content — but only where the section is a stacking context,
+   * which is what `.has-pattern` is for. Without it the layer disappears behind
+   * the band's own colour.
+   */
+  .pattern--block {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+  }
+
+  .pattern__stencil,
+  .pattern__drawing {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    opacity: var(--pattern-opacity, 0.06);
+  }
+
+  /*
+   * The ink, stencilled. Painting a token through a mask rather than shipping a
+   * coloured image is what keeps the ground in the variant's palette — and it
+   * follows the studio bar's live accent for the same reason `HeroField` does.
+   *
+   * Where masks are unsupported the layer would be a solid block of ink over
+   * the page, so it is not drawn at all: no ground is a design, a rectangle of
+   * ink is a bug.
+   */
+  .pattern__stencil {
+    display: none;
+  }
+
+  @supports (mask-image: linear-gradient(#000, #000)) or
+    (-webkit-mask-image: linear-gradient(#000, #000)) {
+    .pattern__stencil {
+      display: block;
+      background-color: currentColor;
+      -webkit-mask-image: var(--pattern-stencil);
+      mask-image: var(--pattern-stencil);
+      -webkit-mask-repeat: repeat;
+      mask-repeat: repeat;
+    }
+  }
+
+  /*
+   * Only a tile has a size. The ruled and hatched grounds are gradients, which
+   * measure their pitch themselves out of --pattern-size and repeat inside one
+   * mask box; sizing that box would squash the figure instead of tiling it.
+   */
+  .pattern[data-pattern='grain'] .pattern__stencil {
+    -webkit-mask-size: var(--pattern-size) var(--pattern-size);
+    mask-size: var(--pattern-size) var(--pattern-size);
+  }
+
+  .pattern__drawing {
+    stroke-width: var(--pattern-weight, 1px);
+  }
+
+  /* The figures arrive as markup from patterns.ts, so the scoped selector does
+     not reach them. */
+  .pattern__drawing :global(*) {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /*
+   * Setting out, once. The still state is the default, so a visitor with no
+   * JavaScript sees the finished drawing — `html.js` is set before first paint
+   * in the layout, and only then is anything hidden.
+   *
+   * `pathLength="1"` on every figure is what makes this one rule work for a
+   * circle, a line and a 56-point contour alike: the browser measures the path,
+   * nobody types a length into the markup, and a figure edited later still
+   * draws correctly.
+   */
+  html.js .pattern[data-draw] .pattern__drawing :global(*) {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: pattern-draw 1.4s var(--ease, ease) forwards;
+    animation-delay: calc(var(--i, 0) * 180ms);
+  }
+
+  @keyframes pattern-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Reduced motion means the finished picture, not a missing one. */
+  @media (prefers-reduced-motion: reduce) {
+    html.js .pattern[data-draw] .pattern__drawing :global(*) {
+      stroke-dashoffset: 0;
+      animation: none;
+    }
+  }
+
+  /* Ink is expensive and a texture is not the content. */
+  @media print {
+    .pattern {
+      display: none;
+    }
+  }
+</style>

@@ -1,0 +1,472 @@
+---
+/**
+ * One photograph.
+ *
+ * A missing file must not take the layout with it: the frame keeps its aspect
+ * ratio and its plate from CSS alone, so a failed lookup costs the picture and
+ * nothing else. That is what lets a photo be swapped — or arrive late — without
+ * touching any page.
+ *
+ * The other rule this component exists to enforce: **a photograph is never
+ * stretched.** A frame narrower or taller than the picture crops into it; it
+ * never squeezes it. Distortion is the one image fault a client always sees and
+ * never has words for — "it looks weird" — so it is not left to per-variant
+ * CSS. `object-fit` is set here, in every branch, and a frame that would throw
+ * away most of the picture says so during the build.
+ *
+ * ── the treatment ───────────────────────────────────────────────────────────
+ *
+ * The second thing this component owns is what a photograph is *printed* like.
+ * Client photos arrive as a feed — twenty pictures in twenty lights, three
+ * phones, two years, white balance disagreeing between every pair — and cropped
+ * well they still disagree. A treatment is what makes them one set: a couple of
+ * blended layers over the picture, in the variant's own tokens, with no build
+ * step and no second copy of any file.
+ *
+ * Six of them, in references/photos.md, and two rules: one per site, and never
+ * a strong one on their face. The second is enforced below rather than advised.
+ */
+import { Image } from 'astro:assets';
+import { GRAIN_TILE, GRAIN_SIZE_PHOTO } from '../lib/noise';
+import { STRONG, altFor, isPerson, photo, shape, type Treatment } from '../lib/photos';
+import design from '../../jtk/design.json';
+
+interface Props {
+  /** File base name in src/assets, without the extension. */
+  name: string;
+  /** Overrides the alt text registered in photos.ts. */
+  alt?: string;
+  /**
+   * CSS aspect-ratio for the frame, e.g. '4 / 5'. Omit it to let the photograph
+   * keep its own proportions — client photos are shot in every orientation and
+   * a square crop takes the subject out of half of them.
+   */
+  ratio?: string;
+  /**
+   * How the picture meets a frame it does not match. `cover` crops, `contain`
+   * fits the whole picture inside and leaves the plate visible around it. There
+   * is deliberately no third option: `fill` distorts.
+   */
+  fit?: 'cover' | 'contain';
+  /**
+   * What the crop keeps when it cannot keep everything — any `object-position`
+   * value. The default centres, which is wrong for nearly every portrait: a
+   * face sits in the top third, and a wide hero frame crops it off. `50% 25%`
+   * is the usual fix.
+   */
+  focus?: string;
+  /** Rendered width hint for the srcset. */
+  width?: number;
+  /** The first contentful image on the page. One per page, never two. */
+  eager?: boolean;
+  /** Describes the layout, not the file. A wrong value is why a phone still
+      downloads the 2400px variant. */
+  sizes?: string;
+  caption?: string;
+  /**
+   * `data-jtk-path` for this picture, where it comes from the content document.
+   *
+   * It goes on the `<img>` and on the placeholder that stands in for a missing
+   * file — **never on the figure around them**. The admin replaces a picture by
+   * setting `src` on the element it was told about, and an element that is not
+   * an image gets its text replaced instead: annotating the figure turns the
+   * client's own photograph into a URL printed where the picture was.
+   */
+  path?: string;
+  /**
+   * This picture says nothing the page does not already say.
+   *
+   * A pile of four photographs is one thing to look at and four alt texts read
+   * out in a row, which is worse for a screen reader than one. So the frame
+   * that carries the meaning keeps its alt and the rest are marked here: empty
+   * alt, which is how a decorative image is skipped rather than described
+   * badly. It is a composition decision, so it is per use, not per file.
+   */
+  decorative?: boolean;
+  /**
+   * How the picture is printed: none · grade · duotone · film · press · recede.
+   *
+   * Defaults to whatever `jtk/design.json` chose for the site, which is
+   * the answer nearly always — a treatment is a property of the page, not of
+   * one picture, and a page where two photographs are printed differently reads
+   * as a page where nobody decided. Set it per photo only to take one *out* of
+   * the treatment, or to push one photograph back under copy with `recede`.
+   */
+  treatment?: Treatment;
+  /** 0–1, how far the treatment goes. Below ~0.4 nobody can tell it is on. */
+  amount?: number;
+  class?: string;
+}
+
+const {
+  name,
+  alt,
+  ratio,
+  fit = 'cover',
+  focus = '50% 50%',
+  width = 900,
+  eager = false,
+  /* Why the <Image> below is given layout="none".
+     This component picks its own widths and its own sizes, so the project's
+     default layout has nothing to add and would only put its own attributes on
+     top of them. That default exists for markdown bodies, which have no props
+     to pick with — see astro.config.mjs.
+
+     The note lives here rather than beside the attribute it explains, because
+     a JSX-style comment between two attributes is not valid Astro. It parses
+     as the start of an expression, and the five errors it produced began with
+     "unterminated string literal" a hundred lines further down. */
+  sizes = '(min-width: 900px) 50vw, 92vw',
+  caption,
+  path,
+  decorative = false,
+  treatment = (design.photos?.treatment || 'none') as Treatment,
+  /* 0 in the document means unchosen, the same as everywhere else in it — a
+     treatment that is genuinely off is `treatment: "none"`, not amount zero. */
+  amount = design.photos?.amount || undefined,
+  class: className,
+} = Astro.props;
+
+const src = photo(name);
+const text = decorative ? '' : (alt ?? altFor(name));
+
+/*
+ * A face is not a surface to decorate.
+ *
+ * `duotone` and `press` replace skin colour, and a one-person business is
+ * chosen by that face — turned two-tone it reads as stock art, which is the
+ * opposite of what the photograph is there to say. photos.md has the long
+ * version; this is the part that cannot be forgotten under time pressure,
+ * because it stops the build instead of looking fine in the window it was
+ * written in.
+ *
+ * The escape is explicit and per photo: pass `treatment="grade"`, or do not
+ * register the slot as a person if it genuinely is not their face.
+ */
+if (STRONG.includes(treatment) && isPerson(name)) {
+  throw new Error(
+    `<Shot name="${name}" treatment="${treatment}"> — that slot is registered as the person ` +
+      'this business is, and this treatment replaces skin colour. Their face is what a ' +
+      'customer is choosing: leave it alone, or pass treatment="grade". See photos.md.',
+  );
+}
+
+const treated = treatment !== 'none';
+const tone = [
+  amount !== undefined ? `--photo-amount:${amount}` : '',
+  treatment === 'film' ? `--photo-grain:${GRAIN_TILE};--photo-grain-size:${GRAIN_SIZE_PHOTO}` : '',
+]
+  .filter(Boolean)
+  .join(';');
+
+/**
+ * Measure before placing. A frame is a decision about which part of the
+ * photograph the visitor never sees, and taken by feel it is usually taken
+ * wrong — a 4:5 portrait dropped into a 16:9 band loses 55% of itself, most of
+ * it the half with the subject in it.
+ *
+ * This does not fail the build: some crops are deliberate. It puts the number
+ * in the build log in front of whoever chose the frame, at the moment they can
+ * still change it.
+ */
+const asked = ratio ? Number(ratio.split('/')[0]) / Number(ratio.split('/')[1] ?? 1) : null;
+const own = shape(name);
+if (asked && own && fit === 'cover') {
+  const kept = Math.min(asked, own.ratio) / Math.max(asked, own.ratio);
+  if (kept < 0.6) {
+    console.warn(
+      `[shot] ${name} is ${own.width}×${own.height} (${own.orientation}) and the frame asks for ` +
+        `${ratio} — the crop throws away ${Math.round((1 - kept) * 100)}% of it.`,
+    );
+  }
+}
+
+const frame = ratio ? `aspect-ratio:${ratio}` : undefined;
+const placement = `--shot-fit:${fit};--shot-focus:${focus}`;
+---
+
+{
+  src ? (
+    <figure class:list={['shot', !ratio && 'shot--natural', className]}>
+      <div
+        class="shot__frame"
+        data-treatment={treated ? treatment : undefined}
+        style={[frame, placement, tone].filter(Boolean).join(';')}
+      >
+        <Image
+          src={src}
+          alt={text}
+          data-jtk-path={path}
+          widths={[Math.round(width / 2), width, width * 2]}
+          sizes={sizes}
+          layout="none"
+          loading={eager ? 'eager' : 'lazy'}
+          decoding={eager ? 'sync' : 'async'}
+          fetchpriority={eager ? 'high' : undefined}
+        />
+        {treated && (
+          <>
+            <span class="shot__tone shot__tone--a" aria-hidden="true" />
+            <span class="shot__tone shot__tone--b" aria-hidden="true" />
+          </>
+        )}
+      </div>
+      {caption && <figcaption class="shot__caption">{caption}</figcaption>}
+    </figure>
+  ) : (
+    <div class:list={['shot', 'shot--placeholder', className]} style={frame ?? 'aspect-ratio:4 / 3'}>
+      {name}
+      {/*
+        The frame is empty and it is still the thing to tap.
+        A client who adds a photograph in the admin has to see it land, and what
+        the admin patches is an image's `src` — so there is an image here, one
+        transparent pixel of it, waiting. Without it the annotation would have to
+        go on the box, and patching a box replaces its text.
+      */}
+      {path && (
+        <img
+          class="shot__ghost"
+          data-jtk-path={path}
+          alt=""
+          src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        />
+      )}
+    </div>
+  )
+}
+
+<style>
+  .shot {
+    margin: 0;
+  }
+
+  /*
+   * The frame, and why it is not the <figure>.
+   *
+   * The crop, the radius and the treatment's layers all belong to the picture's
+   * box; a caption sits under it and must be in none of them. With the ratio on
+   * the figure, a captioned <Shot> also clipped its own caption — the figure was
+   * exactly the picture's height and `overflow: hidden` did the rest.
+   */
+  .shot__frame {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--r-2, 8px);
+  }
+
+  /*
+   * The picture fills the frame and is cropped by it. `object-fit` is not
+   * optional here and there is no path through this component that leaves it
+   * unset: an <img> given both dimensions without it is stretched, which is the
+   * fault this component exists to make impossible.
+   */
+  .shot :global(img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: var(--shot-fit, cover);
+    object-position: var(--shot-focus, 50% 50%);
+  }
+
+  /* Without a declared ratio the picture sets the height and object-fit has
+     nothing to crop — the frame is only there for the radius and the caption. */
+  .shot--natural :global(img) {
+    block-size: auto;
+  }
+
+  /* The waiting image: over the label, filling the frame, invisible until it
+     is given a picture. */
+  .shot__ghost {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* Deliberately visible and labelled: a gap you can see is a gap somebody
+     fills, and a gap that looks like a bug is a gap that ships. */
+  .shot--placeholder {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-2, 8px);
+    display: grid;
+    place-items: center;
+    background: var(--paper-deep, #eceae5);
+    color: var(--ink-quiet, #8a857d);
+    font: 500 0.75rem/1 system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── treatments ────────────────────────────────────────────────────────────
+   *
+   * Two layers over the picture and a filter on it. Nothing here names a
+   * colour: the ink comes from --photo-shadow / --photo-light / --photo-ink,
+   * which are tokens, so a treatment follows the variant's palette and the
+   * studio bar's live accent the same way a ground does.
+   *
+   * --photo-amount is the volume knob and multiplies every layer. At 0 the
+   * photograph is untouched, which is what makes it safe to turn down rather
+   * than off when a client says "less".
+   *
+   * Where blend modes do not land, what is left is the photograph. That is the
+   * whole failure path.
+   */
+  .shot__tone {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /*
+   * grade — the page's own light. Colour is kept; the shadows are pulled toward
+   * the ground's hue and the highlights toward the paper, which is what stops
+   * eight photographs shot in eight kitchens from disagreeing. The gentle one,
+   * and the only one that is safe on a face.
+   */
+  .shot__frame[data-treatment='grade'] :global(img) {
+    filter: saturate(0.94) contrast(1.05);
+  }
+
+  .shot__frame[data-treatment='grade'] .shot__tone--a {
+    background: var(--photo-shadow);
+    mix-blend-mode: multiply;
+    opacity: calc(0.22 * var(--photo-amount, 1));
+  }
+
+  .shot__frame[data-treatment='grade'] .shot__tone--b {
+    background: var(--photo-light);
+    mix-blend-mode: screen;
+    opacity: calc(0.12 * var(--photo-amount, 1));
+  }
+
+  /*
+   * duotone — the colour is thrown away and the tonal range is remapped onto two
+   * tokens: `lighten` raises the blacks to the shadow colour, `multiply` pulls
+   * the whites down to the light one. The strongest unifier here, because a
+   * photograph's original colour is exactly what was disagreeing.
+   *
+   * Never on their face. <Shot> fails the build rather than let it happen.
+   */
+  .shot__frame[data-treatment='duotone'] :global(img) {
+    filter: grayscale(1) contrast(1.12) brightness(1.02);
+  }
+
+  .shot__frame[data-treatment='duotone'] .shot__tone--a {
+    background: var(--photo-shadow);
+    mix-blend-mode: lighten;
+    opacity: calc(0.92 * var(--photo-amount, 1));
+  }
+
+  .shot__frame[data-treatment='duotone'] .shot__tone--b {
+    background: var(--photo-light);
+    mix-blend-mode: multiply;
+    opacity: calc(0.92 * var(--photo-amount, 1));
+  }
+
+  /*
+   * film — lifted blacks, a milky highlight and grain. It is what makes a phone
+   * photograph look like it was taken on purpose.
+   *
+   * True halation — the bright-pass blurred back over the picture — is
+   * deliberately not here: it costs a second copy of every image and a
+   * full-width blur to composite, and on a page of eight photographs that is
+   * paid eight times for the last tenth of the effect.
+   */
+  .shot__frame[data-treatment='film'] :global(img) {
+    filter: saturate(0.88) contrast(0.94) brightness(1.05);
+  }
+
+  .shot__frame[data-treatment='film'] .shot__tone--a {
+    background: var(--photo-light);
+    mix-blend-mode: screen;
+    opacity: calc(0.12 * var(--photo-amount, 1));
+  }
+
+  /* Without masks the grain layer would be a flat wash of ink over the
+     photograph, so it is not drawn at all. */
+  .shot__frame[data-treatment='film'] .shot__tone--b {
+    display: none;
+  }
+
+  @supports (mask-image: linear-gradient(#000, #000)) or
+    (-webkit-mask-image: linear-gradient(#000, #000)) {
+    .shot__frame[data-treatment='film'] .shot__tone--b {
+      display: block;
+      background-color: var(--photo-shadow);
+      -webkit-mask-image: var(--photo-grain);
+      mask-image: var(--photo-grain);
+      -webkit-mask-size: var(--photo-grain-size, 90px) var(--photo-grain-size, 90px);
+      mask-size: var(--photo-grain-size, 90px) var(--photo-grain-size, 90px);
+      mix-blend-mode: overlay;
+      opacity: calc(0.55 * var(--photo-amount, 1));
+    }
+  }
+
+  /*
+   * press — screen-printed: one ink, hard contrast, a dot lattice over it. The
+   * photograph stops pretending to be a photograph, which is the point on a page
+   * whose ground is already `riso` or `hatch`.
+   *
+   * Not a real halftone — the dots are one size rather than sized by the tone
+   * under them, which would need a per-pixel pass. What it borrows is the
+   * register, and at arm's length that is the whole tell.
+   */
+  .shot__frame[data-treatment='press'] :global(img) {
+    filter: grayscale(1) contrast(1.45) brightness(1.06);
+  }
+
+  .shot__frame[data-treatment='press'] .shot__tone--a {
+    background-image: radial-gradient(var(--photo-shadow) 40%, transparent 44%);
+    background-size: var(--photo-dot, 4px) var(--photo-dot, 4px);
+    mix-blend-mode: multiply;
+    opacity: calc(0.5 * var(--photo-amount, 1));
+  }
+
+  .shot__frame[data-treatment='press'] .shot__tone--b {
+    background: var(--photo-ink);
+    mix-blend-mode: multiply;
+    opacity: calc(0.35 * var(--photo-amount, 1));
+  }
+
+  /*
+   * recede — the photograph pushed back into the page so that copy can sit on
+   * it. It is the band-sized answer to the same problem `scrim` solves for the
+   * hero's canvas: contrast that holds over the light half of a picture does
+   * not hold over the dark half.
+   *
+   * A plain veil, not a blend: it has to work over a photograph whose tones are
+   * unknown, and every blend mode has a picture that defeats it.
+   */
+  .shot__frame[data-treatment='recede'] :global(img) {
+    filter: saturate(0.7) contrast(0.92);
+  }
+
+  .shot__frame[data-treatment='recede'] .shot__tone--a {
+    background: var(--photo-veil);
+    opacity: calc(0.55 * var(--photo-amount, 1));
+  }
+
+  .shot__frame[data-treatment='recede'] .shot__tone--b {
+    display: none;
+  }
+
+  /* Ink is expensive and a treatment is not the picture. */
+  @media print {
+    .shot__tone {
+      display: none;
+    }
+
+    .shot__frame :global(img) {
+      filter: none;
+    }
+  }
+
+  .shot__caption {
+    padding-block-start: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--ink-quiet, #6f6a63);
+  }
+</style>

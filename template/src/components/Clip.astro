@@ -1,0 +1,155 @@
+---
+/**
+ * One clip: a few seconds of the work being done, looping, silent.
+ *
+ * ── why a component and not a <video> ───────────────────────────────────────
+ *
+ * Everything below is a way for a clip to fail, and all of them are ordinary:
+ * autoplay refused, Low Power Mode, Data Saver, a codec the browser does not
+ * have, reduced motion, JavaScript off, a battery under twenty percent on an
+ * iPhone. Written by hand each time, a page gets three of the seven right and
+ * the other four show a black rectangle in the middle of somebody's site.
+ *
+ * So the rules live here:
+ *
+ *   · **the poster is the clip's own first frame.** Every failure above lands
+ *     on that picture, so it cannot be a frame from the middle — it has to be
+ *     the frame the loop starts from, or the switch from poster to video is a
+ *     visible jump that reads as a fault. `fl-clips` writes exactly that frame,
+ *     and the admin takes the same one when an owner uploads a clip;
+ *   · **autoplay, muted, looping, inline, and nothing to press.** These are
+ *     moving photographs. A play button in a hero is an invitation to do
+ *     something other than the one action the page is asking for;
+ *   · **no audio track at all**, which is `fl-clips`' business rather than
+ *     this component's: a muted track is bytes nobody hears, and a browser that
+ *     unmutes on a gesture plays a stranger's room out loud;
+ *   · **reduced motion stops it on frame one**, which is the poster. There is
+ *     no CSS that pauses a video, so it is a few lines of script — and with
+ *     JavaScript off the markup's own autoplay runs, which is the right way
+ *     round.
+ *
+ * ── where the clip comes from ───────────────────────────────────────────────
+ *
+ * A key from the content document (`media/<site>/<hash>.mp4`), which the build
+ * downloaded, or a file the repository ships under `public/clips/`. Passing the
+ * content's key is what makes the clip replaceable in the admin — the same
+ * decision as a photograph, with the same consequence for the person who would
+ * otherwise be sending us a message about it.
+ *
+ *   <Clip src={item.name} poster={item.poster} path={item.path} label="Стенсіл" />
+ *
+ * **One label for a set, not one per clip.** Five loops in a pile are visually
+ * one thing, and five labels read out in a row are worse than one sentence:
+ * label the container with `role="img"` and leave these unlabelled.
+ */
+import { uploadedClip, isUpload } from '../lib/uploads';
+import { photo } from '../lib/photos';
+
+interface Props {
+  /** A key from the content document, or a path under `public/`. */
+  src: string;
+  /** The still. A key, or a path under `public/`. */
+  poster?: string;
+  /** `data-jtk-path` for this clip, where it comes from the content document. */
+  path?: string;
+  /** What the set shows, where this clip is the whole of it. */
+  label?: string;
+  /** CSS aspect-ratio for the frame. */
+  ratio?: string;
+  class?: string;
+}
+
+const { src, poster, path, label, ratio = '9 / 16', class: className } = Astro.props;
+
+/*
+ * A key is resolved to the file the build emitted; anything else is taken as
+ * given, which is what a path under `public/` is. `base` matters here: a
+ * preview is served under /p/<slug>/, and a clip addressed from the root is a
+ * clip that 404s there and nowhere else.
+ */
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const address = (value: string): string =>
+  isUpload(value) ? (uploadedClip(value) ?? '') : base + value.replace(/^\//, '');
+
+const clip = address(src);
+
+/*
+ * The poster is the element's own `poster` attribute and not a picture layered
+ * under it. A browser shows it for exactly as long as it is not painting video
+ * frames — which is every one of the failures above, including the ones no
+ * script can detect — and it needs no second element to get right.
+ *
+ * It is not run through `astro:assets`: `fl-clips` writes a poster at the
+ * clip's own size, a few tens of kilobytes, and there is nothing to gain by
+ * making variants of a picture at most visitors see for a quarter of a second.
+ */
+const stillFile = poster && isUpload(poster) ? photo(poster) : undefined;
+const stillURL = poster ? (stillFile ? stillFile.src : address(poster)) : undefined;
+---
+
+<div class:list={['clip', className]} style={`aspect-ratio:${ratio}`} role={label ? 'img' : undefined} aria-label={label}>
+  {
+    clip && (
+      <video
+        class="clip__video"
+        data-jtk-path={path}
+        data-clip
+        poster={stillURL}
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="metadata"
+        aria-hidden={label ? 'true' : undefined}
+      >
+        <source src={clip} type={clip.endsWith('.webm') ? 'video/webm' : 'video/mp4'} />
+      </video>
+    )
+  }
+</div>
+
+<script>
+  /*
+   * Reduced motion: stopped on frame one, which is what the poster shows.
+   *
+   * The markup autoplays, so a browser with JavaScript off plays the loop —
+   * which is the right way round: the setting is a preference somebody
+   * expressed, and it is honoured where it can be read.
+   */
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const clips = document.querySelectorAll<HTMLVideoElement>('video[data-clip]');
+
+  const apply = (): void => {
+    for (const clip of clips) {
+      if (still.matches) {
+        clip.pause();
+        clip.currentTime = 0;
+      } else {
+        clip.play().catch(() => {
+          /* Refused. The poster is the design, not a fallback. */
+        });
+      }
+    }
+  };
+
+  apply();
+  still.addEventListener('change', apply);
+</script>
+
+<style>
+  .clip {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-2, 8px);
+    background: var(--paper-deep, #eceae5);
+  }
+
+  .clip__video {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+</style>

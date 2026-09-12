@@ -1,0 +1,207 @@
+---
+/**
+ * One entry of one collection — a blog post, a work, a job.
+ *
+ * ── one file for every collection, and why it is a starting point ───────────
+ *
+ * This route generates every entry of every collection the site declares, so a
+ * new collection is an entry in `COLLECTIONS` and its listing page, and never a
+ * second copy of this file. What it renders is deliberately plain: a heading, a
+ * picture where there is one, and the body. Exactly like `Blocks.astro`, it is
+ * the thing that makes a site buildable on the first commit, not the design.
+ *
+ * **The design pass replaces what is inside `<article>`. What must survive it
+ * is the annotation.** Every field the owner may edit carries its
+ * `data-jtk-path`, `annotation-lint.mjs` fails the build without one, and an
+ * element that loses its path stops opening the editor *silently*.
+ *
+ * An entry's document opens with the post — its title, its date, its cover and
+ * its prose, always at `blocks[0].<field>`. Everything after it is whatever the
+ * collection lets a post hold (the platform's wiki/30), and its paths are
+ * `blocks[N].<field>` exactly as on any other page.
+ *
+ * ── a hidden entry is built ─────────────────────────────────────────────────
+ *
+ * `getStaticPaths` does **not** filter by `visible`. That is on purpose: an
+ * entry nobody has finished still has to be looked at before it is finished,
+ * and the studio's edge serves such a page only to a session that is editing
+ * the site. Every place that *lists* entries filters — see `src/lib/entries.ts`
+ * — and this one renders.
+ */
+import { everyEntry, rendered } from '../lib/entries';
+import { Image } from 'astro:assets';
+import Layout from '../layouts/Layout.astro';
+import { COLLECTIONS } from '../content/blocks';
+import { isUpload, uploaded } from '../lib/uploads';
+import { photo } from '../lib/photos';
+
+export async function getStaticPaths() {
+  const paths = [];
+
+  for (const collection of COLLECTIONS) {
+    const entries = await everyEntry(collection.name);
+    for (const entry of entries) {
+      paths.push({
+        params: { entry: `${collection.prefix.replace(/^\//, '')}/${entry.id}` },
+        props: { entry, collection },
+      });
+    }
+  }
+  return paths;
+}
+
+const { entry } = Astro.props;
+const data = entry.data as Record<string, unknown>;
+const { Content } = await rendered(entry);
+
+/**
+ * A value from a document as a list of records.
+ *
+ * A function rather than a cast written where it is needed, because a `as
+ * Record<string, unknown>[]` **inside a `{ }` expression in the template** is
+ * not valid Astro: the compiler turns the template into TSX and the cast is
+ * read as a comparison, which produced nine errors starting with "Generic type
+ * 'Record' requires 2 type argument(s)" and cascading to the end of the file.
+ * Casts belong in the frontmatter; the template calls this.
+ *
+ * It also answers for a document that holds something other than a list, which
+ * a hand-edited one can.
+ */
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
+}
+
+/** Everything after the post itself, in the order the owner put it in. */
+const rest = records(data.rest);
+
+const title = typeof data.title === 'string' ? data.title : '';
+const excerpt = typeof data.excerpt === 'string' ? data.excerpt : '';
+const cover = typeof data.cover === 'string' && data.cover !== ''
+  ? (isUpload(data.cover) ? uploaded(data.cover) : photo(data.cover))
+  : undefined;
+
+/**
+ * The entry as a thing search engines and assistants can quote.
+ *
+ * `datePublished` is the field the catalogue reserves, which is why it may be
+ * read by name here: the five keys of an entry are the admin's vocabulary and
+ * not a site's to rename.
+ */
+/**
+ * What a search result says, where somebody wrote it.
+ *
+ * The admin has a card for these two — the title in a result list and the
+ * sentence under it — and they appear nowhere on the page, which is exactly why
+ * they are edited in a form rather than by tapping. Empty, a post is found by
+ * its own heading and its announcement, so this is a fallback and never a
+ * second pair of fields that must be filled in.
+ */
+const seo = (data.seo ?? {}) as Record<string, unknown>;
+const said = (key: string): string =>
+  typeof seo[key] === 'string' ? (seo[key] as string).trim() : '';
+
+const schema = {
+  '@type': 'Article',
+  headline: title,
+  datePublished: typeof data.date === 'string' ? data.date : undefined,
+  description: excerpt || undefined,
+};
+---
+
+<Layout title={said('title') || title} description={said('description') || excerpt} schema={schema}>
+  <main id="content">
+    <article class="entry">
+      <h1 data-jtk-path="blocks[0].title">{title}</h1>
+
+      {
+        cover && (
+          <Image
+            src={cover}
+            alt={title}
+            data-jtk-path="blocks[0].cover"
+            widths={[640, 1280, 1920]}
+            sizes="(min-width: 900px) 60rem, 92vw"
+            layout="none"
+          />
+        )
+      }
+
+      {/*
+        One element for the whole body, because the body is one field. The
+        editor opens it full screen — nine hundred words is not a popover — and
+        what is inside is markdown Astro rendered, pictures and all.
+      */}
+      <div class="entry-body" data-jtk-path="blocks[0].body"><Content /></div>
+
+      {/*
+        And the rest of the post, in the order the owner put it in.
+
+        A post is a *sequence*: its opening prose above, then runs of prose and
+        whatever else it holds, interleaved. A post is written rather than
+        designed, so the owner arranges these in the admin — but *which* types
+        may be in one is this repository's to say, in `COLLECTIONS[].body`, and
+        `text` must be among them or the writing cannot be broken by anything.
+
+        A gallery arrives with the arrangement it is in — `block.view`, always
+        one of the ones its type declares. Draw each one differently: that menu
+        is the whole reason the owner may choose, and a `view` that changes
+        nothing on the page is a choice this repository lied about offering.
+
+        Plain on purpose, exactly like `Blocks.astro`: what the design pass
+        replaces is what is inside, and what must survive it is the
+        `data-jtk-path` on every field the owner may edit.
+      */}
+      {
+        rest.map((block, offset) => {
+          const at = offset + 1;
+
+          /*
+           * A run of prose. A post is a sequence — prose, a gallery, more
+           * prose — and this is what the runs after the first are. Rendered by
+           * the loader, because Astro renders one body per entry and knows
+           * nothing about a second.
+           */
+          if (block.type === 'text') {
+            return (
+              <div
+                class="entry-body"
+                data-jtk-path={`blocks[${at}].body`}
+                set:html={String(block.html ?? '')}
+              />
+            );
+          }
+
+          const pictures = records(block.work ?? block.items);
+
+          return (
+            <div class="entry-wall" data-view={String(block.view ?? '')}>
+              {pictures.map((picture, index) => {
+                /*
+                 * The same two answers the cover has, for the same reason: a
+                 * value is either a key in the studio's bucket, which the build
+                 * downloaded, or the name of a photograph this repository
+                 * ships. Reading only the first renders nothing at all for the
+                 * second, with no error until the build refuses the undefined.
+                 */
+                const src = String(picture.src ?? '');
+                const file = isUpload(src) ? uploaded(src) : photo(src);
+                if (!file) return null;
+
+                return (
+                <Image
+                  src={file}
+                  alt={String(picture.alt ?? '')}
+                  data-jtk-path={`blocks[${at}].work[${index}].src`}
+                  widths={[640, 1280]}
+                  sizes="(min-width: 900px) 30rem, 92vw"
+                  layout="none"
+                />
+                );
+              })}
+            </div>
+          );
+        })
+      }
+    </article>
+  </main>
+</Layout>

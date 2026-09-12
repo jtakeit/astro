@@ -1,0 +1,185 @@
+---
+/**
+ * A pile: several photographs laid over each other, each a little off square.
+ *
+ * ── why this is a component ─────────────────────────────────────────────────
+ *
+ * A pile is four numbers per card and it goes wrong in five predictable places,
+ * every one of which was found in a shipped site built by hand:
+ *
+ *   · the rotated card whose corner leaves the viewport, so the whole page
+ *     scrolls sideways on a phone — the fault `fl-check` fails a build for;
+ *   · five overlapping photographs at 390px, which is mush;
+ *   · four alt texts read out in a row for what is visually one thing;
+ *   · the largest picture in the pile not marked as the page's LCP image;
+ *   · angles typed by hand, which come out the same in every project, or drawn
+ *     at random, which come out different on every rebuild.
+ *
+ * So the arrangement is here and the pictures are yours. Children are laid into
+ * a 12×12 grid by their order — the first is at the back, the last is on top —
+ * and each gets its place and its tilt from that position. Anything can be a
+ * child: a `<Shot>`, a badge, a card, their own mark.
+ *
+ *   <Pile>
+ *     <Shot name="room" />
+ *     <Shot name="work" eager />
+ *     <Shot name="hands" decorative />
+ *     <p class="badge">под ключ</p>
+ *   </Pile>
+ *
+ * ── what it is for ─────────────────────────────────────────────────────────
+ *
+ * `portrait-led` fails on a weak portrait, which on the outbound track is
+ * common: a scraped feed often has no single frame that can carry a screen. A
+ * pile is the answer — four frames share the work, so none of them has to be
+ * the one good photograph nobody has.
+ *
+ * It is the *hand* of the page, and it works by contrast: everything under it
+ * is set square. See references/shapes.md — if everything tilts, nothing does.
+ */
+
+interface Props {
+  /**
+   * The pile's own frame. Rows are a twelfth of it each, so this is what
+   * decides how tall the cards are — not the pictures inside them.
+   */
+  ratio?: string;
+  /**
+   * Multiplies every card's tilt. 0 lays the pile out square, which is a real
+   * choice — the overlap alone is often enough.
+   */
+  tilt?: number;
+  class?: string;
+}
+
+const { ratio = '4 / 3', tilt, class: className } = Astro.props;
+---
+
+<div
+  class:list={['pile', className]}
+  style={[`aspect-ratio:${ratio}`, tilt !== undefined ? `--pile-tilt:${tilt}` : '']
+    .filter(Boolean)
+    .join(';')}
+>
+  <slot />
+</div>
+
+<style>
+  /*
+   * A 12×12 grid with definite rows, so a card's height comes from the pile
+   * rather than from the picture in it. That is what makes the arrangement hold
+   * whatever photographs it is given — a feed arrives in every orientation, and
+   * a pile sized by its contents is a pile that reflows differently per client.
+   */
+  .pile {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(12, 1fr);
+    inline-size: 100%;
+  }
+
+  /*
+   * Order is depth: the first child is at the back. It is the one mental model
+   * that survives somebody editing this six months from now, and it costs one
+   * declaration.
+   *
+   * Every child selector here is `:global`, and it has to be. Slotted children
+   * belong to the page that wrote them, not to this component, so a plain
+   * `.pile > *` compiles to a scope attribute they do not carry and the whole
+   * arrangement silently does nothing — the cards land in auto-placed cells and
+   * the pile looks like a small broken grid. It cost an afternoon once.
+   */
+  .pile > :global(*) {
+    margin: 0;
+    block-size: 100%;
+    min-inline-size: 0;
+    rotate: calc(var(--tilt, 4deg) * var(--pile-n, 0) * var(--pile-tilt, 1));
+  }
+
+  /*
+   * The arrangement. Five places, because a sixth card is a collage rather than
+   * a pile and stops reading as one thing.
+   *
+   * Nothing reaches the outer column on both sides at once, which is what keeps
+   * a rotated corner inside the box. Move a card by overriding its grid-area and
+   * --pile-n from the page; that is a design decision, not a fork of this file.
+   */
+  .pile > :global(:nth-child(1)) {
+    grid-area: 2 / 1 / 9 / 6;
+    --pile-n: -1;
+    z-index: 1;
+  }
+
+  .pile > :global(:nth-child(2)) {
+    grid-area: 1 / 6 / 7 / 12;
+    --pile-n: 0.9;
+    z-index: 2;
+  }
+
+  .pile > :global(:nth-child(3)) {
+    grid-area: 6 / 3 / 13 / 8;
+    --pile-n: 1.2;
+    z-index: 3;
+  }
+
+  .pile > :global(:nth-child(4)) {
+    grid-area: 5 / 8 / 12 / 13;
+    --pile-n: -0.8;
+    z-index: 4;
+  }
+
+  /* The small one — a badge, a mark, a phone. It carries the biggest angle
+     because a small object can. */
+  .pile > :global(:nth-child(5)) {
+    grid-area: 8 / 1 / 12 / 4;
+    --pile-n: 1.7;
+    z-index: 5;
+  }
+
+  /*
+   * The pile sizes its children, so a <Shot> inside one fills the cell it was
+   * given rather than keeping its own proportions. This reaches into that
+   * component on purpose: a layout component that cannot size what it lays out
+   * is a layout component that only works on one set of photographs.
+   */
+  .pile :global(.shot),
+  .pile :global(.shot__frame),
+  .pile :global(.shot--natural img) {
+    block-size: 100%;
+  }
+
+  .pile :global(.shot--natural img) {
+    object-fit: var(--shot-fit, cover);
+  }
+
+  /*
+   * On a phone a pile is mush.
+   *
+   * Five overlapping photographs at 390px is four thumbnails and an argument.
+   * So the overlap goes and the tilt stays: two columns, square-ish cells, half
+   * the angle — enough that the hand is still visible, little enough that the
+   * corners stay inside a narrow screen.
+   *
+   * The fifth card is dropped rather than shrunk. It is the small one, it was
+   * decoration in a composition that no longer exists, and a 90px cell is worse
+   * than nothing.
+   */
+  @media (max-width: 700px) {
+    .pile {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: none;
+      gap: 0.75rem;
+      aspect-ratio: auto !important;
+    }
+
+    .pile > :global(*) {
+      grid-area: auto !important;
+      aspect-ratio: 4 / 5;
+      rotate: calc(var(--tilt, 4deg) * var(--pile-n, 0) * var(--pile-tilt, 1) * 0.5);
+    }
+
+    .pile > :global(:nth-child(n + 5)) {
+      display: none;
+    }
+  }
+</style>

@@ -1,0 +1,375 @@
+/*
+ * Edges and entrances.
+ *
+ * Two of the three catalogues in `docs/surface.md` of @jtakeit/astro.
+ * The third — the ground a page is printed on — is a component, because it is
+ * a figure with a size and a place; these two are properties of blocks that
+ * already exist, so they are attributes rather than wrappers:
+ *
+ *   <section class="band" data-edge="corners" data-reveal="wipe">
+ *
+ * Which is also why they degrade well. Delete the attribute and the block is a
+ * block; delete this file and the page still reads. Nothing here changes what a
+ * section *is*.
+ *
+ * ── the rules that stop this becoming a demo ────────────────────────────────
+ *
+ *   · One reveal per page. Four different entrances is a component gallery, not
+ *     a design, and it is the loudest tell that nobody chose.
+ *   · Nothing in the first screen is revealed. It delays the largest paint and
+ *     it shows a visitor on a slow line an empty page. `fl-check` fails on it.
+ *   · An animated edge belongs to something that can be clicked. Furniture that
+ *     performs is furniture being looked at instead of the words.
+ *   · One continuously moving thing per page, and the hero usually already
+ *     spent it.
+ *
+ * Every hidden start state hangs on `html.js`, which the layout sets before
+ * first paint — otherwise a visitor with JavaScript off is left staring at
+ * `opacity: 0` forever. `.is-in` is added by the observer in Layout.astro.
+ */
+
+/* ── the ground's host ───────────────────────────────────────────────────────
+ *
+ * A block-scope <Pattern> sits at z-index -1: above this section's background,
+ * below its content. That only holds where the section is a stacking context,
+ * and these are the two properties that make it one. Without them the ground
+ * disappears behind the band's own colour, which looks exactly like a ground
+ * that was never added.
+ */
+.has-pattern {
+  position: relative;
+  isolation: isolate;
+}
+
+/* ── the hand ────────────────────────────────────────────────────────────────
+ *
+ * One element, laid down slightly off square. `--tilt` is the magnitude and it
+ * is the same everywhere on the page; this only chooses the direction.
+ *
+ *   <figure class="shot" data-tilt="left">
+ *
+ * ── two things worth knowing ────────────────────────────────────────────────
+ *
+ * It is the `rotate` property, not `transform: rotate()`. They are separate
+ * properties now, which means a tilted element can still be moved by an
+ * entrance — `data-tilt="left" data-reveal="rise"` works, where a transform
+ * would have overwritten the other one and the block would arrive straight.
+ *
+ * And the rule that makes it worth anything: **the tilt is the exception.** A
+ * page tilts its pile, or its one signature card, and sets everything else
+ * square — the hand reads because the rest is a straight edge to read it
+ * against. See references/shapes.md.
+ */
+
+[data-tilt='left'] {
+  rotate: calc(var(--tilt) * -1);
+}
+
+[data-tilt='right'] {
+  rotate: var(--tilt);
+}
+
+/* ── edges ───────────────────────────────────────────────────────────────────
+ *
+ * Drawn on a pseudo-element rather than as a border, so that adding an edge
+ * never changes a block's size and never fights the padding a design already
+ * settled. `notch` is the exception — a cut corner is the box, not a line on
+ * it.
+ */
+
+[data-edge] {
+  position: relative;
+}
+
+[data-edge]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* The hairline. Everything else on this list is a departure from it. */
+[data-edge='hairline']::after {
+  border: var(--edge-weight) solid var(--edge-ink);
+}
+
+/* Sewn, ruled, provisional. */
+[data-edge='stitch']::after {
+  border: var(--edge-weight) dashed var(--edge-ink);
+}
+
+/*
+ * Crop marks: the corners are drawn and the sides are not, so the block reads
+ * as registered rather than as boxed. The mask is four squares, one per corner,
+ * each revealing the two border runs that meet there.
+ */
+[data-edge='corners']::after {
+  border: var(--edge-weight) solid var(--edge-ink);
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0), linear-gradient(#000 0 0),
+    linear-gradient(#000 0 0);
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0), linear-gradient(#000 0 0),
+    linear-gradient(#000 0 0);
+  -webkit-mask-size: var(--edge-corner) var(--edge-corner);
+  mask-size: var(--edge-corner) var(--edge-corner);
+  -webkit-mask-position: top left, top right, bottom left, bottom right;
+  mask-position: top left, top right, bottom left, bottom right;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/*
+ * A ticket, a label, a price tag. The cut is on the box itself, so a block with
+ * a background of its own is the one to put it on — on a transparent block
+ * there is nothing to cut.
+ */
+[data-edge='notch'] {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--edge-corner)) 0,
+    100% var(--edge-corner),
+    100% 100%,
+    0 100%
+  );
+}
+
+[data-edge='notch']::after {
+  display: none;
+}
+
+/*
+ * Two frames, one offset from the other: a poster's register. The outer one is
+ * an outline, which sits outside the box without taking space — and which is
+ * why this belongs on blocks rather than on anything focusable, whose own focus
+ * ring is drawn the same way.
+ */
+[data-edge='offset'] {
+  outline: var(--edge-weight) solid var(--accent);
+  outline-offset: var(--edge-offset);
+}
+
+[data-edge='offset']::after {
+  border: var(--edge-weight) solid var(--edge-ink);
+}
+
+/*
+ * The perimeter draws itself once, clockwise from the top. A conic gradient as
+ * a mask is the whole trick: one angle animated from nothing to a full turn
+ * reveals the border in the order a pen would draw it.
+ *
+ * Without JavaScript the border is simply there — the hidden state is under
+ * `html.js`, and the finished state is the default.
+ */
+@property --edge-p {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+[data-edge='trace']::after {
+  border: var(--edge-weight) solid var(--edge-ink);
+}
+
+html.js [data-edge='trace']::after {
+  --edge-p: 0;
+  -webkit-mask-image: conic-gradient(#000 calc(var(--edge-p) * 1turn), transparent 0);
+  mask-image: conic-gradient(#000 calc(var(--edge-p) * 1turn), transparent 0);
+}
+
+html.js [data-edge='trace'].is-in::after {
+  animation: edge-trace 0.9s var(--ease) forwards;
+}
+
+@keyframes edge-trace {
+  to {
+    --edge-p: 1;
+  }
+}
+
+/*
+ * A light travelling around the edge. This is the loud one: it never stops, so
+ * it is the page's single continuous animation and it belongs on the one thing
+ * a visitor is supposed to press. `fl-check` counts them and checks what they
+ * are attached to.
+ *
+ * The ring is a conic gradient with the middle masked out — `exclude` leaves
+ * only the padding, which is the border. Under the light there is a plain ring
+ * in the edge colour: without it the block has no edge for three quarters of
+ * every turn, which reads as a border that keeps breaking.
+ */
+@property --edge-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+[data-edge='sweep']::after {
+  padding: var(--edge-weight);
+  background-color: var(--edge-ink);
+  background-image: conic-gradient(
+    from var(--edge-a),
+    transparent 0 52%,
+    var(--accent) 76%,
+    transparent 90% 100%
+  );
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-clip: content-box, border-box;
+  mask-clip: content-box, border-box;
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: edge-sweep 4.5s linear infinite;
+}
+
+@keyframes edge-sweep {
+  to {
+    --edge-a: 360deg;
+  }
+}
+
+/*
+ * The card answers the hand. `focus-within` as well as hover, or the same card
+ * is dead to a keyboard.
+ */
+[data-edge='lift'] {
+  transition:
+    box-shadow var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+[data-edge='lift']:hover,
+[data-edge='lift']:focus-within {
+  box-shadow: var(--shadow-2, 0 12px 34px rgb(0 0 0 / 12%));
+  transform: translateY(-2px);
+}
+
+[data-edge='none']::after {
+  display: none;
+}
+
+/* ── entrances ───────────────────────────────────────────────────────────────
+ *
+ * One per page. They are not seven flavours of fade: a page of photographs
+ * wants `develop`, a list wants `stagger`, a dense page wants `settle` because
+ * travel makes a long column feel like it is bouncing.
+ *
+ * `data-reveal` with no value is `rise`, so the plain attribute keeps working
+ * wherever it was already written.
+ */
+
+html.js [data-reveal=''],
+html.js [data-reveal='rise'] {
+  opacity: 0;
+  transform: translateY(var(--reveal-dist));
+  transition:
+    opacity var(--reveal-dur) var(--ease),
+    transform var(--reveal-dur) var(--ease);
+}
+
+/* No travel: it arrives where it already was. For pages with a lot of blocks. */
+html.js [data-reveal='settle'] {
+  opacity: 0;
+  transform: scale(1.015);
+  transition:
+    opacity var(--reveal-dur) var(--ease),
+    transform var(--reveal-dur) var(--ease);
+}
+
+/* A print register: the block is uncovered rather than moved. */
+html.js [data-reveal='wipe'] {
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path calc(var(--reveal-dur) * 1.2) var(--ease);
+}
+
+/* Photographic: out of focus, then not. Expensive on a large box — put it on
+   the picture, not on the section around it. */
+html.js [data-reveal='develop'] {
+  opacity: 0;
+  filter: blur(12px) saturate(0.6);
+  transition:
+    opacity var(--reveal-dur) var(--ease),
+    filter var(--reveal-dur) var(--ease);
+}
+
+/*
+ * The children, in order. `--i` is set by the observer as the row enters, so a
+ * list rendered from a document does not have to carry an index into its
+ * markup — which is the version of this that gets forgotten on the second list.
+ */
+html.js [data-reveal='stagger'] > * {
+  opacity: 0;
+  transform: translateY(var(--reveal-dist));
+  transition:
+    opacity var(--reveal-dur) var(--ease),
+    transform var(--reveal-dur) var(--ease);
+  transition-delay: calc(var(--i, 0) * var(--reveal-step));
+}
+
+html.js [data-reveal='stagger'].is-in > * {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * Line art draws itself. Every figure needs `pathLength="1"`, and then one rule
+ * covers a circle, a line and a 56-point contour alike — nobody measures a path
+ * by hand, and a figure edited next month still draws.
+ */
+html.js [data-reveal='draw'] :is(path, line, circle, rect, polyline, ellipse) {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+html.js [data-reveal='draw'].is-in :is(path, line, circle, rect, polyline, ellipse) {
+  animation: reveal-draw 1.4s var(--ease) forwards;
+  animation-delay: calc(var(--i, 0) * 180ms);
+}
+
+@keyframes reveal-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+html.js [data-reveal=''].is-in,
+html.js [data-reveal='rise'].is-in,
+html.js [data-reveal='settle'].is-in,
+html.js [data-reveal='develop'].is-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+html.js [data-reveal='wipe'].is-in {
+  clip-path: inset(0 0 0 0);
+}
+
+/*
+ * Reduced motion means the finished state, never a broken one — and never a
+ * missing one either: the drawing is complete, the block is in place, the
+ * border is closed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html.js [data-reveal],
+  html.js [data-reveal] > * {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    clip-path: none;
+    transition: none;
+  }
+
+  html.js [data-reveal='draw'] :is(path, line, circle, rect, polyline, ellipse) {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  html.js [data-edge='trace']::after {
+    --edge-p: 1;
+    animation: none;
+  }
+
+  [data-edge='sweep']::after {
+    animation: none;
+  }
+}

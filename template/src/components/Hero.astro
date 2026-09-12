@@ -1,0 +1,66 @@
+---
+/**
+ * The first screen's words.
+ *
+ * Its own component because it is rendered in two places — inside `HeroField`
+ * when a palette has been chosen, and in a plain section when one has not — and
+ * duplicating it would mean one of the two losing an annotation the day
+ * somebody edits the other. Astro's frontmatter is TypeScript rather than JSX,
+ * so a local variable holding the markup is not an option; a component is.
+ */
+import { block, flPath, picture, HOME } from '../copy/{{LOCALE}}';
+import Shot from './Shot.astro';
+
+/*
+ * The hero's photograph, where the document has one.
+ *
+ * It is a field rather than a file written into this component for the same
+ * reason the heading is: the owner can change it. `picture()` gives the slot,
+ * its words and its annotation together — and the annotation is what makes the
+ * picture tappable, which is the whole of "every photograph on the page is
+ * either a gallery item or a field of its own".
+ *
+ * Rendered after the words and in its own element, so a design pass can put it
+ * anywhere — beside them, behind them, or nowhere — without touching what it is.
+ */
+const hero = block('hero');
+const shot = picture(hero.of, hero.at, 'image');
+---
+
+<div class="hero__inner">
+  {HOME.hero.eyebrow && (
+    <p class="eyebrow" data-jtk-path={flPath('hero', 'eyebrow')}>{HOME.hero.eyebrow}</p>
+  )}
+  {/* Guarded like everything else around it, and it is the one that was not.
+      `title` is `required: true` in the catalogue, so a real page always has
+      its h1; the only document where this is empty is the untouched scaffold,
+      where an empty <h1> is worth nothing to a reader and made `fl-catalogue`
+      fail on a project nobody had edited yet. */}
+  {HOME.hero.heading && (
+    <h1 data-jtk-path={flPath('hero', 'title')}>{HOME.hero.heading}</h1>
+  )}
+  {HOME.hero.lead && (
+    <p class="lead" data-jtk-path={flPath('hero', 'lead')}>{HOME.hero.lead}</p>
+  )}
+  {HOME.hero.cta && (
+    <p class="actions">
+      <a class="btn" href={HOME.hero.ctaHref} data-jtk-path={flPath('hero', 'cta_label')}>
+        {HOME.hero.cta}
+      </a>
+    </p>
+  )}
+
+  {/* The page's largest picture, so it is the one loaded eagerly — one per
+      page, never two. */}
+  {shot.name && (
+    <Shot
+      name={shot.name}
+      alt={shot.alt}
+      path={shot.path}
+      class="hero__shot"
+      eager
+      width={1200}
+      sizes="(min-width: 62rem) 50vw, 92vw"
+    />
+  )}
+</div>

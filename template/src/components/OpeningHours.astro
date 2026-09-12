@@ -1,0 +1,69 @@
+---
+/**
+ * The business's opening hours, read from the module's settings.
+ *
+ * The owner keeps the hours in the panel, under the diary; publish writes
+ * that document to `jtk/bookings.json`. This is the one place a page should
+ * take its hours from — a block that types them again as text is a second
+ * copy, and the platform's judge advises against it (JTK_W_MODULE_TWIN).
+ *
+ * A repository nobody has published yet has no `jtk/bookings.json`, so the
+ * file is read through a glob rather than imported: absent, the component
+ * draws nothing and the build goes on.
+ */
+interface Row {
+  day: string;
+  opens: string;
+  closes: string;
+}
+interface Props {
+  locale: 'uk' | 'de' | 'en';
+  /** The heading over the list; empty draws none. */
+  title?: string;
+}
+const { locale, title = '' } = Astro.props;
+
+const files = import.meta.glob<{ blocks?: { hours?: Row[] }[] }>('/jtk/bookings.json', {
+  eager: true,
+  import: 'default',
+});
+const settings = Object.values(files)[0];
+const rows: Row[] = settings?.blocks?.[0]?.hours ?? [];
+
+const ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAYS: Record<Props['locale'], Record<string, string>> = {
+  uk: { monday: 'Понеділок', tuesday: 'Вівторок', wednesday: 'Середа', thursday: 'Четвер', friday: 'Пʼятниця', saturday: 'Субота', sunday: 'Неділя' },
+  de: { monday: 'Montag', tuesday: 'Dienstag', wednesday: 'Mittwoch', thursday: 'Donnerstag', friday: 'Freitag', saturday: 'Samstag', sunday: 'Sonntag' },
+  en: { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' },
+};
+const CLOSED: Record<Props['locale'], string> = { uk: 'зачинено', de: 'geschlossen', en: 'closed' };
+
+// One line per day, in the week's order; a day with two rows — a break —
+// is two stretches on one line; a day with none is closed.
+const week = ORDER.map((day) => ({
+  day,
+  label: DAYS[locale][day],
+  stretches: rows.filter((row) => row.day === day).map((row) => `${row.opens}–${row.closes}`),
+}));
+---
+{rows.length > 0 && (
+  <section class="hours">
+    {title && <h2 class="hours__title">{title}</h2>}
+    <dl class="hours__list">
+      {week.map((one) => (
+        <div class="hours__row" data-day={one.day}>
+          <dt class="hours__day">{one.label}</dt>
+          <dd class="hours__time">{one.stretches.length === 0 ? CLOSED[locale] : one.stretches.join(', ')}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+)}
+
+<style>
+  /* Legible and nothing more: the site's own type and rules go here. */
+  .hours__list { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1.25rem; margin: 0; }
+  .hours__row { display: contents; }
+  .hours__day { margin: 0; }
+  .hours__time { margin: 0; font-variant-numeric: tabular-nums; }
+</style>

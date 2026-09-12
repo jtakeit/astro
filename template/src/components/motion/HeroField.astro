@@ -1,0 +1,520 @@
+---
+/**
+ * The hero's moving ground.
+ *
+ * One canvas behind the hero, painted in the variant's own tokens. It is the
+ * page's single "wow" moment — the thing that makes a landing look built rather
+ * than assembled — and it is written so that it can fail completely without
+ * anybody noticing:
+ *
+ *   no JavaScript · no WebGL · reduced motion · off screen · a lost context
+ *
+ * all end at the same place, a still ground drawn in CSS from the same colours.
+ * Nothing readable is ever inside the canvas.
+ *
+ * Ten fields ship, and they are not ten skins of one look — pick from the
+ * design, not by taste. What each one is for is in the table in
+ * `docs/hero-motion.md` of @jtakeit/astro; the shaders themselves are
+ * in ./fields.ts.
+ *
+ * **`colors` and `ground` have no defaults, on purpose.** A field in somebody
+ * else's colours is the loudest tell that a page was generated, and a default
+ * palette is how that happens — nobody ever goes back to change one. The
+ * component does not compile until four colours and a ground have been chosen
+ * for *this* business, from their photographs, their room and their work:
+ * `PORTRAIT.md` or `BRIEF.md` has them under Colour and material.
+ *
+ * Any CSS value works, tokens included, and tokens are the better answer when
+ * the variant's own palette already came off their photographs.
+ *
+ *   <HeroField
+ *     field="glow"
+ *     ground="#0b0705"
+ *     colors={['#3b1d0e', '#ff8a3d', '#ffd8a8', '#120a06']}
+ *     scrim
+ *   >
+ *     <h1>…</h1>
+ *   </HeroField>
+ */
+import type { Field } from './fields';
+
+interface Props {
+  /**
+   * drift · aurora · plasma · glow · flow · silk · smoke · riso · veil ·
+   * ribbons. A design decision, not a taste one — see the table in
+   * hero-motion.md, which also has the two pairs that are close enough to need
+   * telling apart.
+   */
+  field?: Field;
+  /**
+   * Exactly four colours, in any CSS form, taken from this business rather than
+   * from a shader gallery. Required: there is no sensible default for "their
+   * colours", and a field that ships in the kit's blue is a field that says the
+   * page was assembled.
+   */
+  colors: [string, string, string, string] | string[];
+  /**
+   * The ground the field is mixed into, and the colour the CSS fallback paints.
+   * Required for the same reason. `glow`, `aurora`, `veil` and `ribbons` want a
+   * dark one — `veil` shows it through the curtain, so it is looked at rather
+   * than merely under things; `drift`, `silk`, `flow` and `riso` are happy on
+   * paper. `smoke` wants a palette with a real dark in it, whichever way the
+   * ground goes.
+   */
+  ground: string;
+  /** Multiplies the field's own pace. Below 1 is slower; 2 is already restless. */
+  speed?: number;
+  /** Film grain, 0–1. A little of it is what stops a gradient looking like CSS. */
+  grain?: number;
+  /**
+   * Let the field lean toward the pointer. `ribbons` only, off by default: a
+   * background that chases the mouse is a background that is being looked at
+   * instead of the words.
+   */
+  pointer?: boolean;
+  /**
+   * Lay a gradient between the field and the content. Set it whenever text
+   * sits on top: a field moves, and contrast that holds in one frame does not
+   * hold in all of them.
+   */
+  scrim?: boolean;
+  class?: string;
+}
+
+const {
+  field = 'drift',
+  colors,
+  ground,
+  speed = 1,
+  grain = 0.35,
+  pointer = false,
+  scrim = false,
+  class: className,
+} = Astro.props;
+
+/*
+ * Four, not "up to four". Three colours passed by hand means the fourth is
+ * whatever the shader's fallback happens to be, which is the generated look
+ * this component exists to avoid — and it is worth failing the build over,
+ * because a warning in a build log is a warning nobody reads.
+ */
+if (!Array.isArray(colors) || colors.filter(Boolean).length < 4) {
+  throw new Error(
+    `<HeroField field="${field}"> needs four colours chosen for this business — ` +
+      'their photographs, their room, their work. See Colour and material in ' +
+      'PORTRAIT.md or BRIEF.md, and hero-motion.md for what each field wants.',
+  );
+}
+
+const vars = [
+  ...colors.slice(0, 4).map((c, i) => `--field-${i + 1}:${c}`),
+  `--field-ground:${ground}`,
+].join(';');
+---
+
+<div
+  class:list={['field', className]}
+  style={vars}
+  data-hero-field={field}
+  data-speed={String(speed)}
+  data-grain={String(grain)}
+  data-pointer={pointer ? '' : undefined}
+>
+  <canvas class="field__canvas" aria-hidden="true"></canvas>
+  {scrim && <div class="field__scrim" aria-hidden="true"></div>}
+  <div class="field__content"><slot /></div>
+</div>
+
+<style>
+  /*
+   * The CSS ground. This is not a loading state — on a phone with WebGL
+   * disabled, in a screenshot taken by a headless browser, and for anyone who
+   * asked for less motion, it is the hero. It has to look deliberate on its
+   * own, which is why it is built from the same four colours rather than from
+   * a grey.
+   */
+  .field {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--field-ground, var(--paper, #fff));
+    background-image:
+      radial-gradient(120% 90% at 12% 18%, var(--field-1, var(--accent)) 0%, transparent 62%),
+      radial-gradient(100% 80% at 88% 26%, var(--field-2, var(--accent-ink)) 0%, transparent 58%),
+      radial-gradient(110% 90% at 50% 108%, var(--field-3, var(--paper-deep)) 0%, transparent 64%);
+  }
+
+  .field__canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    /* Faded in after the first frame, so the swap from the CSS ground to the
+       canvas is not a flash of a different picture. */
+    opacity: 0;
+    transition: opacity 600ms var(--ease, ease);
+  }
+
+  .field[data-state='live'] .field__canvas {
+    opacity: 1;
+  }
+
+  .field__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--field-ground, var(--paper)) 70%, transparent),
+      color-mix(in srgb, var(--field-ground, var(--paper)) 35%, transparent)
+    );
+  }
+
+  .field__content {
+    position: relative;
+    z-index: 1;
+    block-size: 100%;
+  }
+</style>
+
+<script>
+  /*
+   * One module for every field on the page. It owns the canvas, the palette,
+   * the sizing budget and the loop; the two renderers below own what is drawn.
+   * Every path out of here is the same path: leave the canvas transparent and
+   * let the CSS ground stand.
+   */
+  import { FRAGMENT, VERTEX, type Field, type ShaderField } from './fields';
+
+  type Colours = { palette: Float32Array; ground: [number, number, number] };
+
+  interface Renderer {
+    /** Canvas pixels, and how many of them go to one CSS pixel. */
+    resize(width: number, height: number, scale: number): void;
+    draw(time: number, dt: number, colours: Colours): void;
+    /** Listeners a renderer added for itself. */
+    dispose?(): void;
+  }
+
+  /*
+   * Colours arrive as whatever the token holds — a hex, an rgb(), a
+   * color-mix(). A 2D context normalises every one of them, which is cheaper
+   * and more complete than parsing CSS by hand.
+   */
+  const probe = document.createElement('canvas').getContext('2d');
+
+  function toRgb(value: string, fallback: [number, number, number]): [number, number, number] {
+    const text = value.trim();
+    if (!probe || !text) return fallback;
+    probe.fillStyle = '#000000';
+    probe.fillStyle = text;
+    const normalised = probe.fillStyle as string;
+    const hex = /^#([0-9a-f]{6})$/i.exec(normalised);
+    if (hex) {
+      const n = parseInt(hex[1], 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    }
+    const rgb = /rgba?\(([^)]+)\)/.exec(normalised);
+    if (rgb) {
+      const parts = rgb[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      if (parts.length >= 3) return [parts[0] / 255, parts[1] / 255, parts[2] / 255];
+    }
+    return fallback;
+  }
+
+  const css = (rgb: [number, number, number], alpha: number) =>
+    `rgba(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)}, ${alpha})`;
+
+  /** One fullscreen fragment shader. Four of the five fields are this. */
+  function shaderRenderer(canvas: HTMLCanvasElement, source: string, grain: number): Renderer | null {
+    // preserveDrawingBuffer: the pitch video photographs the page rather than
+    // filming it, and a buffer discarded after each frame photographs blank.
+    const gl = canvas.getContext('webgl', {
+      alpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      powerPreference: 'low-power',
+      preserveDrawingBuffer: true,
+    });
+    if (!gl) return null;
+
+    const compile = (type: number, src: string) => {
+      const shader = gl.createShader(type);
+      if (!shader) return null;
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.warn('hero field:', gl.getShaderInfoLog(shader));
+        return null;
+      }
+      return shader;
+    };
+
+    const vertex = compile(gl.VERTEX_SHADER, VERTEX);
+    const fragment = compile(gl.FRAGMENT_SHADER, source);
+    const program = gl.createProgram();
+    if (!vertex || !fragment || !program) return null;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+    gl.useProgram(program);
+
+    // One triangle covering the viewport. A quad would need two.
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+    const uniform = {
+      resolution: gl.getUniformLocation(program, 'u_resolution'),
+      time: gl.getUniformLocation(program, 'u_time'),
+      grain: gl.getUniformLocation(program, 'u_grain'),
+      // Some drivers only answer to the indexed name.
+      colors: gl.getUniformLocation(program, 'u_colors[0]') ?? gl.getUniformLocation(program, 'u_colors'),
+      bg: gl.getUniformLocation(program, 'u_bg'),
+    };
+
+    return {
+      resize(width, height) {
+        gl.viewport(0, 0, width, height);
+      },
+      draw(time, _dt, colours) {
+        gl.uniform2f(uniform.resolution, canvas.width, canvas.height);
+        gl.uniform1f(uniform.time, time);
+        gl.uniform1f(uniform.grain, grain);
+        gl.uniform3fv(uniform.colors, colours.palette);
+        gl.uniform3f(uniform.bg, colours.ground[0], colours.ground[1], colours.ground[2]);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      },
+    };
+  }
+
+  /**
+   * Ribbons: stacked sine curves with a noise term, drawn as lines rather than
+   * as a colour field. Canvas 2D on purpose — it is the member of the set that
+   * works where WebGL does not, and line art is a different job from light.
+   */
+  function ribbonRenderer(canvas: HTMLCanvasElement, follows: boolean): Renderer | null {
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return null;
+
+    let width = 1;
+    let height = 1;
+    // Where the pointer is, and where the drawing has caught up to. The lag is
+    // the whole effect: an instant response reads as a jitter.
+    let targetX = 0;
+    let pointerX = 0;
+    const onPointerMove = (event: PointerEvent) => {
+      const box = canvas.getBoundingClientRect();
+      if (!box.width) return;
+      targetX = ((event.clientX - box.left) / box.width - 0.5) * 2;
+    };
+    const onPointerLeave = () => {
+      targetX = 0;
+    };
+    if (follows) {
+      window.addEventListener('pointermove', onPointerMove, { passive: true });
+      window.addEventListener('pointerleave', onPointerLeave);
+      window.addEventListener('blur', onPointerLeave);
+    }
+
+    const wobble = (x: number, t: number, offset: number) =>
+      (Math.sin(x * 0.0012 + t * 0.25 + offset) + Math.cos(x * 0.0028 - t * 0.4 + offset * 2)) / 2;
+
+    const LAYERS = [
+      { count: 14, step: 6, amplitude: 55, pace: 1.1, weight: 1.4, lead: true },
+      { count: 9, step: 8, amplitude: 30, pace: 0.7, weight: 0.8, lead: false },
+    ];
+
+    return {
+      resize(pixelWidth, pixelHeight, scale) {
+        // Geometry is written in CSS pixels; the transform carries the device
+        // ratio, so the same numbers work on a 1× monitor and a 3× phone.
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        width = pixelWidth / scale;
+        height = pixelHeight / scale;
+      },
+      draw(time, dt, colours) {
+        pointerX += (targetX - pointerX) * (1 - Math.exp(-6 * dt));
+
+        ctx.fillStyle = css(colours.ground, 1);
+        ctx.fillRect(0, 0, width, height);
+
+        const ramp = ctx.createLinearGradient(0, 0, width, 0);
+        ramp.addColorStop(0, css(colours.ground, 0.15));
+        ramp.addColorStop(0.5, css([colours.palette[0], colours.palette[1], colours.palette[2]], 0.9));
+        ramp.addColorStop(1, css([colours.palette[3], colours.palette[4], colours.palette[5]], 0.2));
+
+        for (const layer of LAYERS) {
+          // The stack is centred rather than pinned near the top: a hero is any
+          // height, and a band that starts at 24% of it hangs off a short one.
+          const gap = height * 0.034;
+          const top = (height - gap * (layer.count - 1)) / 2 + (layer.lead ? 0 : gap * 0.4);
+          for (let r = 0; r < layer.count; r++) {
+            const progress = r / layer.count;
+            const base = top + r * gap;
+            ctx.beginPath();
+            for (let x = 0; x <= width + layer.step; x += layer.step) {
+              // Pinned at both edges: a ribbon that ends mid-swing looks cut.
+              const envelope = Math.sin((x / width) * Math.PI);
+              const frequency = 1 + wobble(x, time, progress) * 0.18;
+              const amplitude = 1 + wobble(x * 2, -time, progress * 0.5) * 0.15;
+              const lift =
+                Math.sin(x * 0.0035 * frequency + time * layer.pace + r * 0.18) *
+                  (layer.amplitude * envelope * amplitude) +
+                Math.cos(x * 0.008 - time * 0.7 + r * 0.1) * (20 * envelope) +
+                Math.sin(x * 0.018 + time * 1.4) * (8 * envelope);
+              const near = Math.exp(
+                -Math.pow(Math.abs(x - (0.5 + pointerX * 0.5) * width) / (layer.lead ? 380 : 220), 2),
+              );
+              const lean = Math.sin(x * 0.015 + time * 2.6) * near * (layer.lead ? 46 : 22) * envelope;
+              const y = base + lift + lean;
+              x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.globalAlpha = (1 - progress * 0.75) * (layer.lead ? 0.8 : 0.45);
+            ctx.strokeStyle = ramp;
+            ctx.lineWidth = layer.weight + (1 - progress) * 0.5;
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      },
+      dispose() {
+        if (!follows) return;
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerleave', onPointerLeave);
+        window.removeEventListener('blur', onPointerLeave);
+      },
+    };
+  }
+
+  function setup(host: HTMLElement) {
+    const canvas = host.querySelector<HTMLCanvasElement>('.field__canvas');
+    if (!canvas) return;
+
+    const kind = (host.dataset.heroField ?? 'drift') as Field;
+    const speed = Number(host.dataset.speed) || 1;
+    const grain = Number(host.dataset.grain ?? '0.35') || 0;
+
+    const renderer =
+      kind === 'ribbons'
+        ? ribbonRenderer(canvas, host.dataset.pointer !== undefined)
+        : shaderRenderer(canvas, FRAGMENT[kind as ShaderField] ?? FRAGMENT.drift, grain);
+    if (!renderer) return;
+
+    const DEFAULTS: [number, number, number][] = [
+      [0.18, 0.36, 1],
+      [0.11, 0.25, 0.84],
+      [0.96, 0.95, 0.93],
+      [0.09, 0.07, 0.06],
+    ];
+    const colours = { palette: new Float32Array(12), ground: [1, 1, 1] as [number, number, number] };
+
+    const readPalette = () => {
+      const style = getComputedStyle(host);
+      for (let i = 0; i < 4; i++) {
+        colours.palette.set(toRgb(style.getPropertyValue(`--field-${i + 1}`), DEFAULTS[i]), i * 3);
+      }
+      colours.ground = toRgb(style.getPropertyValue('--field-ground'), [1, 1, 1]);
+    };
+
+    const resize = () => {
+      const rect = host.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rawWidth = Math.max(1, Math.round(rect.width * dpr));
+      const rawHeight = Math.max(1, Math.round(rect.height * dpr));
+      // A field is fill-rate bound: a 3× phone at full resolution costs more
+      // than the effect is worth, and nobody can see the difference.
+      const budget = Math.min(1, Math.sqrt(2_000_000 / Math.max(1, rawWidth * rawHeight)));
+      const width = Math.max(1, Math.round(rawWidth * budget));
+      const height = Math.max(1, Math.round(rawHeight * budget));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      renderer.resize(width, height, Math.max(0.1, width / Math.max(1, rect.width)));
+    };
+
+    let elapsed = 0;
+    let painted = false;
+
+    const draw = (dt: number) => {
+      renderer.draw(elapsed, dt, colours);
+      if (!painted) {
+        painted = true;
+        host.dataset.state = 'live';
+      }
+    };
+
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+    let raf = 0;
+    let last = 0;
+    let inView = true;
+
+    const frame = (now: number) => {
+      raf = 0;
+      // Clamped, so a tab that was in the background for a minute does not
+      // resume a minute further into the animation.
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      elapsed += dt * speed;
+      draw(dt);
+      raf = requestAnimationFrame(frame);
+    };
+
+    const start = () => {
+      if (raf || still.matches || !inView || document.hidden) return;
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const stop = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+
+    readPalette();
+    resize();
+    // Reduced motion means the finished state, not a missing one: the field is
+    // painted once and then left alone.
+    draw(0);
+    start();
+
+    new IntersectionObserver(([entry]) => {
+      inView = entry?.isIntersecting ?? true;
+      inView ? start() : stop();
+    }).observe(host);
+
+    new ResizeObserver(() => {
+      resize();
+      if (!raf) draw(0);
+    }).observe(host);
+
+    // The studio bar drives --accent live, and a variant may swap the palette
+    // on a class. Either way the field follows rather than keeping yesterday's
+    // colour.
+    new MutationObserver(() => {
+      readPalette();
+      if (!raf) draw(0);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme'] });
+
+    document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+    still.addEventListener('change', () => (still.matches ? stop() : start()));
+    canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      stop();
+      renderer.dispose?.();
+      // Back to the CSS ground rather than to a black rectangle.
+      painted = false;
+      host.removeAttribute('data-state');
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-hero-field]').forEach(setup);
+</script>

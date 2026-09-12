@@ -1,0 +1,411 @@
+/*
+ * Base for {{NAME}}.
+ *
+ * Deliberately plain. The palette, the type and the layout are decided per
+ * variant from the brief — nothing in this file is a design suggestion, and the
+ * default look must never be mistaken for a direction somebody chose.
+ *
+ * What it does establish is the token vocabulary the components expect, so that
+ * a variant fills these in rather than inventing new names. One rule matters
+ * more than the rest and is easy to get wrong:
+ *
+ *   --accent        the FILL. Buttons, bars, badges — anything ink sits ON.
+ *   --accent-ink    the same signal as TEXT. On a light ground it is a step
+ *                   DARKER; on a dark ground it inverts. A component that puts
+ *                   words on --accent is a contrast bug, not a preference.
+ *
+ * Surfaces run in one direction: --paper is the MIDDLE tone, --panel is LIFTED
+ * above it, --paper-deep is RECESSED below it. "Deep" means recessed, not dark.
+ *
+ * The preview shell drives --accent live from the studio bar, so a variant's
+ * brand colour must route through this property and everything derived from it
+ * should be derived in CSS rather than hard-coded — otherwise the picker moves
+ * one colour and leaves five behind.
+ */
+
+/*
+ * Edges, entrances, and the host class a block-scope ground needs. Kept in its
+ * own file because it is a catalogue rather than a base: see
+ * `docs/surface.md` of @jtakeit/astro.
+ */
+@import './surface.css';
+
+:root {
+  --paper: #ffffff;
+  --panel: #ffffff;
+  --paper-deep: #f4f2ee;
+
+  --ink: #16130f;
+  --ink-quiet: #6f6a63;
+  --line: #e2ded7;
+
+  --accent: #2f5bff;
+  --accent-ink: #1c3fd6;
+  --danger: #b3261e;
+
+  /*
+   * How wide things are allowed to be — two different questions with two
+   * different answers, and collapsing them is why a page built at 1440 looks
+   * stranded on a 27-inch monitor.
+   *
+   *   --shell     the layout's outer width. It GROWS with the screen.
+   *   --measure   how long a line of text may get. It does NOT: past about 65
+   *               characters the eye loses the start of the next line.
+   *
+   * A shell capped at 1200px is 47% of a 2560px screen, and everything inside
+   * it reads as an island. Cap the measure instead and let the composition use
+   * the space. See the Composition floor in the astro-kit skill.
+   */
+  --shell: min(92rem, 92vw);
+  --measure: 34rem;
+
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 14px;
+  --r-4: 22px;
+
+  --dur: 180ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /*
+   * The surface: the ground a page is printed on, the edge a block is drawn
+   * with, and how a block arrives. Three catalogues, one reference —
+   * `docs/surface.md` of @jtakeit/astro — and the same discipline as
+   * the rest of this file: a component reads these names rather than typing a
+   * value of its own.
+   *
+   * --pattern-ink is the only colour here on purpose. Everything the ground
+   * draws is that one token at that one opacity, which is what keeps a
+   * background inside the variant's palette instead of beside it. <Pattern>
+   * sets its own geometry per ground; these are the parts a variant tunes.
+   */
+  --pattern-ink: var(--ink);
+
+  --edge-ink: var(--line);
+  --edge-weight: 1px;
+  /* How much of a corner `corners` draws, and how deep `notch` cuts. */
+  --edge-corner: 18px;
+  --edge-offset: 7px;
+
+  --reveal-dur: 0.7s;
+  --reveal-dist: 24px;
+  /* Between one staggered child and the next. Past ~120ms a list reads as slow. */
+  --reveal-step: 80ms;
+
+  /*
+   * What a photograph is printed in. Six treatments in <Shot>, all built from
+   * these four and nothing else — see `docs/photos.md` of @jtakeit/astro.
+   *
+   * --photo-shadow carries the ground's hue on purpose. A neutral black in the
+   * shadows of a photograph on a warm page turns them grey, which is the same
+   * fault as a neutral shadow under a card and reads the same way: dirty rather
+   * than photographed.
+   */
+  --photo-shadow: color-mix(in srgb, var(--ink) 78%, var(--accent));
+  --photo-light: var(--paper);
+  --photo-ink: var(--accent);
+  /* What `recede` veils a picture with, so copy can sit on it. */
+  --photo-veil: var(--paper);
+  --photo-amount: 1;
+
+  /*
+   * The hand.
+   *
+   * How far off square something laid down by a person sits. Measured off the
+   * sites that do this well, it is ±3–6°: past about 8° it stops reading as a
+   * hand and starts reading as a template, and the difference between a page
+   * that looks made and one that looks generated is that single number.
+   *
+   * It is a token because it has to be the *same* number everywhere on a page.
+   * Two elements at two angles nobody chose is the thing that makes a
+   * composition look accidental rather than casual.
+   */
+  --tilt: 4deg;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/*
+ * An in-page link is an instant jump unless told otherwise, and on a long
+ * landing page a jump reads as a page reload: the visitor loses the thread and
+ * often scrolls back up to check what happened. Smooth scrolling is the
+ * expected behaviour here, and it is switched off wholesale for anyone who
+ * asked for less motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * Where a link lands. Without this the target's border box goes to the top of
+ * the screen — which on a section with generous top padding means arriving at
+ * an empty screen, with the heading the visitor came for still below the fold.
+ * Every anchor target sets its own offset: a positive one to keep air above a
+ * panel's visible edge, a negative one to pull past padding that carries no
+ * meaning. See the Composition floor in the astro-kit skill.
+ */
+[id] {
+  scroll-margin-block-start: 1.5rem;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Nothing on the page scrolls sideways. Wide things scroll inside their own
+     container; the body never does. */
+  overflow-x: hidden;
+}
+
+img,
+picture,
+svg,
+video {
+  max-inline-size: 100%;
+}
+
+a {
+  color: var(--accent-ink);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/*
+ * Autofill. Chrome and Safari repaint a filled field with their own background
+ * and their own text colour, which on any palette that is not white turns a
+ * designed form into a white-and-yellow one the moment the browser helps. There
+ * is no property to switch it off: the background has to be covered by an inset
+ * shadow, and the text colour set through -webkit-text-fill-color, which wins
+ * over `color`. The long transition is the standard trick for the repaint that
+ * fires on submit.
+ *
+ * These are the tokens the field itself uses. A variant that gives its inputs a
+ * different surface overrides this rule with the same two properties rather than
+ * deleting it.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 100vmax var(--paper-deep) inset;
+  box-shadow: 0 0 0 100vmax var(--paper-deep) inset;
+  caret-color: var(--ink);
+  transition: background-color 100000s ease-in-out 0s;
+}
+
+/* Visible keyboard focus is a floor, not a feature. */
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+/*
+ * Type scales with the screen and then stops. A bare vw is unbounded and a
+ * fixed rem never grows — clamp() is the whole answer, and a heading that is
+ * the same size on a laptop and on a 27-inch monitor is the commonest sign
+ * that nobody opened the page wide.
+ */
+h1 {
+  font-size: clamp(2rem, 1.2rem + 3vw, 4.5rem);
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-2);
+  cursor: pointer;
+  transition: filter var(--dur) var(--ease);
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/*
+ * Reduced motion means the finished state, never a broken one. The catalogue in
+ * surface.css lands each of its own entrances in the right finished place; this
+ * is the floor under everything else.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── the page's sections ─────────────────────────────────────────────────────
+ *
+ * A starting point, not a design. `Blocks.astro` renders whatever shape the
+ * content document has, and this gives it a readable measure, some air and a
+ * heading scale so it can be looked at before anybody has styled it. The design
+ * pass replaces all of it; what it must not remove is the annotation, which
+ * lives in the markup rather than here.
+ */
+
+.hero,
+.band {
+  padding: clamp(3rem, 8vw, 7rem) 1.25rem;
+}
+
+.hero__inner,
+.band__inner {
+  width: var(--shell);
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+.band:nth-of-type(even) {
+  background: var(--paper-deep);
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+
+.lead {
+  max-width: var(--measure);
+  margin: 1rem 0 0;
+  font-size: clamp(1.0625rem, 2.4vw, 1.25rem);
+  line-height: 1.6;
+  color: var(--ink-quiet);
+}
+
+.quiet {
+  margin: 0.25rem 0 0;
+  color: var(--ink-quiet);
+}
+
+.prose {
+  max-width: var(--measure);
+  margin-top: 1rem;
+  line-height: 1.7;
+}
+
+.prose > * + * {
+  margin-top: 0.85em;
+}
+
+/*
+ * A picture in a body, and pictures side by side.
+ *
+ * These two class names are the whole of what a post's pictures can look like,
+ * and `figures.mjs` is what makes them out of plain markdown: one image alone
+ * in a paragraph is a figure, several in *one* paragraph are a row, and the
+ * caption is markdown's own title slot.
+ *
+ * Restyle them. Do not invent a third — the point of a small named set is that
+ * what a body can look like was decided once by the kit rather than again by
+ * every site, and the editor can only offer what exists here.
+ */
+.fl-figure {
+  margin: 2rem 0;
+}
+
+.fl-figure img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--radius, 0);
+}
+
+.fl-figure figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-quiet);
+}
+
+/*
+ * A row wraps rather than shrinking past legibility: three photographs on a
+ * phone are three photographs, not three stamps. `--3` and `--4` say how many
+ * were asked for; how many actually fit is the screen's to decide.
+ */
+.fl-row {
+  display: grid;
+  gap: clamp(0.5rem, 1.5vw, 1rem);
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  margin: 2rem 0;
+}
+
+.fl-row .fl-figure {
+  margin: 0;
+}
+
+/* Two is the one count that must not wrap on a small screen: a pair is a
+   comparison, and a comparison stacked is two pictures. */
+.fl-row--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.actions {
+  margin: 1.75rem 0 0;
+}
+
+.items {
+  display: grid;
+  gap: 1.5rem clamp(1.5rem, 3vw, 2.5rem);
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An edge needs somewhere to sit: a card with no padding gets a line hard
+   against its text. The design decides the real value; this keeps the starting
+   point honest. */
+.item[data-edge] {
+  padding: 1.25rem;
+}
+
+.item h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+.item p {
+  margin: 0.5rem 0 0;
+  line-height: 1.65;
+  color: var(--ink-quiet);
+}
+
+/* The hero sits on the field, so its own padding has to survive the canvas
+ * behind it — the component fills its box and puts the content above. */
+.field.hero {
+  padding: 0;
+}
+
+.field.hero .field__content {
+  padding: clamp(3rem, 8vw, 7rem) 1.25rem;
+}
