@@ -11,10 +11,22 @@
  * file is read through a glob rather than imported: absent, the component
  * draws nothing and the build goes on.
  */
+/**
+ * One stretch of a working day, as `jtk/bookings.json` stores it: whole
+ * minutes from local midnight, which is what the `time_of_day` kind is
+ * everywhere on the platform. It used to say `string` and print the number —
+ * «570–1170» on a page that meant 09:30–19:30.
+ */
 interface Row {
   day: string;
-  opens: string;
-  closes: string;
+  opens: number;
+  closes: number;
+}
+
+/** 540 -> «09:00». The diary's zone is the site's; a minute count has none. */
+function clock(minutes: number): string {
+  const whole = Math.max(0, Math.floor(minutes));
+  return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`;
 }
 interface Props {
   locale: 'uk' | 'de' | 'en';
@@ -43,7 +55,7 @@ const CLOSED: Record<Props['locale'], string> = { uk: 'зачинено', de: 'g
 const week = ORDER.map((day) => ({
   day,
   label: DAYS[locale][day],
-  stretches: rows.filter((row) => row.day === day).map((row) => `${row.opens}–${row.closes}`),
+  stretches: rows.filter((row) => row.day === day).map((row) => `${clock(row.opens)}–${clock(row.closes)}`),
 }));
 ---
 {rows.length > 0 && (

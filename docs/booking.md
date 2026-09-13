@@ -35,14 +35,19 @@ them.
 ```astro
 ---
 import BookingForm from '../components/BookingForm.astro';
-import { entries } from '../lib/entries';
-const services = entries('services').map((e) => ({
-  slug: e.slug, title: e.title,
-  takes: e.block.takes, costs: e.block.costs, group: e.block.group,   // for the checklist's total and headings
+import { listed } from '../lib/entries';                                // src/lib/entries.ts: the visible entries, in the collection's order
+import bookings from '../../jtk/bookings.json';
+const services = (await listed('services')).map((e) => ({
+  slug: e.id, title: String(e.data.title),
+  takes: e.data.takes, costs: e.data.costs, group: e.data.group,      // for the checklist's total and headings
 }));
-const masters  = entries('masters').map((e) => ({ slug: e.slug, title: e.title }));
+const masters  = (await listed('masters')).map((e) => ({ slug: e.id, title: String(e.data.title) }));
 const combine  = bookings.blocks[0].combine === true;                  // jtk/bookings.json, the owner's setting
 ```
+
+An entry is `{ id, data }` — the slug and the block's fields — which is what
+`src/lib/entries.ts` exports (`listed`, `everyEntry`, `href`); there is no
+`entries()` and never was one, which this page used to claim.
 
 And `jtk/bookings.json` says **where the form is** — `"page": "/angebote"` in its
 block — because the form is placed by a page template rather than by a block, so
