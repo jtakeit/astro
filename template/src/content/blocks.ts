@@ -1,6 +1,22 @@
 /**
  * What the admin may edit on this site.
  *
+ * ── the contract, before the essay ──────────────────────────────────────────
+ *
+ *   BLOCKS          every block type a page renders: type, v: 1, label, fields
+ *   fields          key, label, kind; client_editable: true for what the owner edits,
+ *                   and every such field is rendered with data-jtk-path on the page
+ *   COLLECTIONS     name, label, prefix, type; pages: false for records without a page
+ *   MODULES         { bookings: { services: '<collection>', resources: '<collection>' } }
+ *   PAGE_SEO        the title and description of every page
+ *   BUSINESS_FACTS  what the owner types once for the whole site
+ *
+ *   `npx @jtakeit/astro catalogue` writes jtk/catalogue.json from this file and
+ *   seeds jtk/bookings.json (one bookings_config block) when MODULES turns
+ *   bookings on. Push, then `validate_catalogue` by site and ref judges the
+ *   whole commit. The platform's reference/contract.md has every rule in one
+ *   line each, with the code that refuses it.
+ *
  * ── the one file that decides whether a bespoke site is editable ────────────
  *
  * The studio's admin edits a site by tapping the text on it. It can do that for
