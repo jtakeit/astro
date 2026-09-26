@@ -57,9 +57,18 @@ interface Props {
   combine?: boolean;
   /** The site's currency, for the running total. */
   currency?: string;
+  /**
+   * What the business sells by — the module's `scale`, read from
+   * `jtk/bookings.json`: `'daily'` for one that lets things by the day. Every
+   * letting starts at midnight, so an hourly form offered «00:00» on every day
+   * and confirmed «00:00–00:00», which a visitor reads as a broken site. The
+   * platform's own answer carries the scale too and wins while the page runs;
+   * this decides the words drawn before it has answered.
+   */
+  scale?: string;
 }
 
-const { services, resources = [], locale, daysAhead = 30, combine = false, currency = 'CHF' } = Astro.props;
+const { services, resources = [], locale, daysAhead = 30, combine = false, currency = 'CHF', scale = '' } = Astro.props;
 
 // The checklist's runs, in the order the services came, each heading once.
 const runs: { group: string; items: Named[] }[] = [];
@@ -70,7 +79,7 @@ for (const one of services) {
   else runs.push({ group, items: [one] });
 }
 
-const WORDS = {
+const BASE = {
   uk: {
     service: 'Послуга', services: 'Послуги', total: 'Разом', pickService: 'Оберіть хоча б одну послугу.', resource: 'Майстер', any: 'Будь-хто', day: 'День', time: 'Час',
     name: "Ім'я", phone: 'Телефон', email: 'Електронна пошта', note: 'Коментар',
@@ -106,6 +115,28 @@ const WORDS = {
   },
 }[locale];
 
+// A letting is had for days, not at a time: «Час», «вільного часу немає» and
+// «Час зарезервовано» are a salon's words.
+const DAYS = {
+  uk: {
+    time: 'Дні', none: 'Цього дня нічого вільного немає.',
+    payNote: 'Ці дні тримаємо за вами 30 хвилин. Щоб закріпити їх, завершіть оплату.',
+    taken: 'Ці дні щойно зайняли — оберіть інші.',
+  },
+  de: {
+    time: 'Tage', none: 'Ab diesem Tag ist nichts frei.',
+    payNote: 'Die Tage sind 30 Minuten für Sie reserviert. Schliessen Sie die Zahlung ab, um sie zu behalten.',
+    taken: 'Diese Tage wurden gerade vergeben — bitte wählen Sie andere.',
+  },
+  en: {
+    time: 'Days', none: 'Nothing is free from that day.',
+    payNote: 'The days are held for 30 minutes. Complete the payment to keep them.',
+    taken: 'Those days have just been taken — please choose others.',
+  },
+}[locale];
+
+const WORDS = scale === 'daily' ? { ...BASE, ...DAYS } : BASE;
+
 const today = new Date().toISOString().slice(0, 10);
 const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
 ---
@@ -115,6 +146,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   data-booking
   data-currency={currency}
   data-words={JSON.stringify(WORDS)}
+  data-scale={scale}
   data-api={under('/api/')}
   novalidate
 >
@@ -227,7 +259,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
    * plainly what the platform answered.
    */
   type Words = Record<string, string>;
-  type Slot = { start: string; free: string[] };
+  type Slot = { start: string; free: string[]; ends?: string };
 
   declare global {
     interface Window {
@@ -244,6 +276,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
   function wire(form: HTMLFormElement): void {
     const words = JSON.parse(form.dataset.words ?? '{}') as Words;
+    // Days or hours. The page's own setting first; the platform's answer,
+    // once there is one, wins — an owner may switch without a rebuild.
+    let daily = form.dataset.scale === 'daily';
     const api = form.dataset.api ?? '/api/';
     const q = <T extends HTMLElement>(sel: string) => form.querySelector<T>(sel)!;
 
@@ -341,6 +376,20 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       return words.failed;
     }
 
+    // A letting's day, «сб, 26 вер.» on a button, «субота, 26 вересня» in a
+    // sentence. Out to back, both drawn: the day it comes back is the day to
+    // bring it.
+    function dayOf(iso: string, long: boolean): string {
+      try {
+        return new Intl.DateTimeFormat(document.documentElement.lang || 'en', long
+          ? { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }
+          : { weekday: 'short', day: 'numeric', month: 'short', timeZone: zone || undefined },
+        ).format(new Date(iso));
+      } catch {
+        return iso.slice(0, 10);
+      }
+    }
+
     function clock(iso: string): string {
       try {
         return new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
@@ -371,8 +420,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       try {
         const answer = await fetch(api + 'availability?' + params.toString(), { cache: 'no-store' });
         if (!answer.ok) throw new Error(await answer.text());
-        const data = (await answer.json()) as { zone: string; slots: Slot[]; party_max?: number };
+        const data = (await answer.json()) as { zone: string; slots: Slot[]; party_max?: number; scale?: string };
         zone = data.zone;
+        if (typeof data.scale === 'string') daily = data.scale === 'daily';
         offerParty(data.party_max ?? 0);
         if (data.slots.length === 0) {
           hint.textContent = words.none;
@@ -383,7 +433,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'booking__slot';
-          button.textContent = clock(slot.start);
+          button.textContent = daily
+            ? slot.ends ? `${dayOf(slot.start, false)} — ${dayOf(slot.ends, false)}` : dayOf(slot.start, false)
+            : clock(slot.start);
           button.addEventListener('click', () => {
             chosen = slot.start;
             for (const other of slots.querySelectorAll('.booking__slot')) other.classList.remove('is-chosen');
@@ -453,7 +505,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       const box = q<HTMLElement>('[data-done]');
       box.hidden = false;
       q<HTMLElement>('[data-done-line]').textContent = made.state === 'confirmed' ? words.confirmed : words.pending;
-      q<HTMLElement>('[data-done-when]').textContent = `${new Intl.DateTimeFormat(document.documentElement.lang || 'en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }).format(new Date(made.start))}, ${clock(made.start)}–${clock(made.ends)}`;
+      q<HTMLElement>('[data-done-when]').textContent = daily
+        ? `${dayOf(made.start, true)} — ${dayOf(made.ends, true)}`
+        : `${new Intl.DateTimeFormat(document.documentElement.lang || 'en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }).format(new Date(made.start))}, ${clock(made.start)}–${clock(made.ends)}`;
 
       const manage = q<HTMLAnchorElement>('[data-manage]');
       if (made.manage_path) { manage.href = made.manage_path; manage.textContent = words.manage; manage.hidden = false; }
