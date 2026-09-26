@@ -26,7 +26,10 @@ import { BLOCKS, LOCALE, words, type Field } from '../content/blocks';
 const asks: Field[] = BLOCKS.find((block) => block.type === 'cta_banner')?.asks ?? [];
 
 /** The `<input type>` a visitor types this kind into. */
-function inputType(kind: Field['kind']): string {
+/** One of the input types a lead form's field can be — named, so `type` on
+ *  the element is checked as one: `string` here was the one error
+ *  `astro check` reported on a fresh scaffold. */
+function inputType(kind: Field['kind']): 'number' | 'tel' | 'email' | 'url' | 'date' | 'time' | 'text' {
   switch (kind) {
     case 'number': return 'number';
     case 'tel': return 'tel';
