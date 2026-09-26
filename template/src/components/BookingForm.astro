@@ -440,6 +440,16 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       }
     }
 
+    // A letting handed over at an hour says it beside the day — «сб, 10 жовт.
+    // 15:00»; one from midnight is its day (25 September 2026).
+    function dayAndHour(iso: string, long: boolean): string {
+      let midnight = true;
+      try {
+        midnight = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone || undefined }).format(new Date(iso)) === '00:00';
+      } catch { /* the day alone */ }
+      return midnight ? dayOf(iso, long) : `${dayOf(iso, long)}, ${clock(iso)}`;
+    }
+
     function clock(iso: string): string {
       try {
         return new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
@@ -592,7 +602,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           button.type = 'button';
           button.className = 'booking__slot';
           button.textContent = daily
-            ? slot.ends ? `${dayOf(slot.start, false)} — ${dayOf(slot.ends, false)}` : dayOf(slot.start, false)
+            ? slot.ends ? `${dayAndHour(slot.start, false)} — ${dayAndHour(slot.ends, false)}` : dayAndHour(slot.start, false)
             : clock(slot.start);
           button.addEventListener('click', () => {
             chosen = slot.start;
@@ -678,7 +688,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       box.hidden = false;
       q<HTMLElement>('[data-done-line]').textContent = made.state === 'confirmed' ? words.confirmed : words.pending;
       q<HTMLElement>('[data-done-when]').textContent = daily
-        ? `${dayOf(made.start, true)} — ${dayOf(made.ends, true)}`
+        ? `${dayAndHour(made.start, true)} — ${dayAndHour(made.ends, true)}`
         : `${new Intl.DateTimeFormat(document.documentElement.lang || 'en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }).format(new Date(made.start))}, ${clock(made.start)}–${clock(made.ends)}`;
 
       // What was taken: the class promised, where «any free» was chosen; the

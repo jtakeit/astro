@@ -43,6 +43,7 @@ const services = (await listed('services')).map((e) => ({
 }));
 const masters  = (await listed('masters')).map((e) => ({ slug: e.id, title: String(e.data.title) }));
 const combine  = bookings.blocks[0].combine === true;                  // jtk/bookings.json, the owner's setting
+const scale    = bookings.blocks[0].scale ?? '';                      // 'daily' for a business that lets things by the day
 ```
 
 An entry is `{ id, data }` — the slug and the block's fields — which is what
@@ -56,7 +57,7 @@ booking*. Empty means the front page.
 
 ```ts
 ---
-<BookingForm services={services} resources={masters} locale="de" combine={combine} currency="CHF" />
+<BookingForm services={services} resources={masters} locale="de" combine={combine} scale={scale} currency="CHF" />
 ```
 
 With `combine` on — the module's setting, the owner's to flip — the services
@@ -65,6 +66,23 @@ and money, and the visit is booked as one: the same person, the sum of the
 lengths, the sum of the prices. Off, the form is one choice, as it always was.
 Only services with a `takes` belong on the form; a price-list row without one
 is refused by the platform, so filter before passing.
+
+With `scale` set to `'daily'` — a business that lets cars, flats or desks by
+the day — the form speaks in days: the offered starts read «сб, 26 вер. — нд,
+27 вер.», the confirmation «субота, 26 вересня — неділя, 27 вересня», and none
+of the salon's hours. Every letting starts at midnight, so the hourly words
+said «00:00» everywhere, which a visitor reads as a broken site. The platform's
+answer carries the scale too and wins while the page runs; the prop decides
+the words drawn before it answers.
+
+By the day the visitor gives two dates, «від» and «до», and the form books
+that many nights: it sends `count` — how many of the service — and never an
+end, because the platform computes the end and the price from the service. How
+many may be taken is the service's, in `jtk/content`: `fewest` and `most`,
+one to thirty when unsaid. A service taken a fixed number of times — a week
+as `takes` 10080 with `fewest` and `most` both 1 — asks for the first date
+only. The platform's first answer says all of this per service, so a tariff
+changed in the panel needs no rebuild.
 
 Pass `resources` only when the visitor should choose; leave it out for a solo
 business and the platform assigns. The words are the component's, per locale;
