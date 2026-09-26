@@ -121,7 +121,7 @@ const BASE = {
     taken: 'Цей час щойно зайняли — оберіть інший.', failed: 'Не вдалося записатися. Спробуйте ще раз або зателефонуйте.',
     back: 'До', length: 'Від {min} до {max} діб.', anyOf: 'Будь-яке вільне — {class}', took: 'Ви берете: {what}',
     party: 'Скільки вас', challenge: 'Підтвердіть, що ви не робот, і спробуйте ще раз.', tooMany: 'У вас уже є кілька відкритих записів. Скасуйте один із них або зателефонуйте нам.',
-    needContact: 'Вкажіть телефон або пошту, щоб ми могли з вами звʼязатися.', noScript: 'Щоб записатися онлайн, увімкніть JavaScript — або зателефонуйте нам.',
+    needContact: 'Вкажіть телефон або пошту, щоб ми могли з вами звʼязатися.', noScript: 'Онлайн-форма працює з увімкненим JavaScript — увімкніть його або зателефонуйте нам.',
   },
   de: {
     service: 'Leistung', services: 'Leistungen', total: 'Zusammen', pickService: 'Bitte mindestens eine Leistung wählen.', resource: 'Bei', any: 'Egal wer', day: 'Tag', time: 'Uhrzeit',
@@ -188,6 +188,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   data-api={under('/api/')}
   novalidate
 >
+  {/* Without a script the form cannot ask the platform for the business's
+      words, so this sentence names no kind of booking at all: «записатися»
+      here was a salon's word on a car rental's page. */}
   <noscript><p class="booking__note">{WORDS.noScript}</p></noscript>
 
   <div class="field">
