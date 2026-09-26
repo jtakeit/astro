@@ -32,8 +32,8 @@ Both are ordinary collections the owner edits in the admin — the team page and
 the diary's masters are the **same entries**. A service entry carries `takes`
 as a `duration` field; a master entry may carry its own weekly `hours`. The
 business's hours, days off and confirmation mode are the module's settings
-document, which the owner edits under the diary; the repository never holds
-them.
+document, which the owner edits under the diary; publish writes it to
+`jtk/bookings.json`, and a first commit may seed it there (below).
 
 ## The page
 

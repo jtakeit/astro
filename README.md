@@ -53,9 +53,12 @@ and this tool sits its exam.
 
 ## Then, on the platform
 
-1. Push the repository somewhere the platform's GitHub App can reach.
-2. `create_site`, then `attach_repo`.
-3. `trigger_build`; `import_branch` after committing content; `publish`.
+1. Push the repository somewhere the platform's GitHub App can reach, and run
+   `validate_catalogue` by site and ref once the site exists.
+2. `create_site`, then `attach_repo` — it imports the branch.
+3. `commit_and_build` — the first build; `get_build` until it settles. Later:
+   commit, `import_branch`, `commit_and_build`. `trigger_build` rebuilds a site
+   that has been built once, and refuses one that has not.
 4. `get_preview_link` to look; the studio hands the owner's link to the client from
    the panel.
 
