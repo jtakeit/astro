@@ -28,6 +28,14 @@
  * date only. What the form draws comes from that answer rather than from the
  * build, so a service changed in the panel needs no rebuild.
  *
+ * ── any of a class, or this one ─────────────────────────────────────────────
+ *
+ * Where the business keeps classes, the choice of what to take is «any free
+ * Економ» — the platform gives the first free one — or one car by name, with
+ * what tells it from its twins: «VW Combi · білий · AA1234BB». Both from the
+ * platform's answer (`resources`, `classes`), and the page that just booked
+ * says which was taken.
+ *
  * ── what the page passes in ─────────────────────────────────────────────────
  *
  * The services and the resources are collection entries the owner edits, so
@@ -100,7 +108,7 @@ const BASE = {
     pay: 'Оплатити', payNote: 'Час зарезервовано на 30 хвилин. Щоб закріпити його, завершіть оплату.',
     manage: 'Скасувати або перенести запис', telegram: 'Нагадування в Telegram',
     taken: 'Цей час щойно зайняли — оберіть інший.', failed: 'Не вдалося записатися. Спробуйте ще раз або зателефонуйте.',
-    back: 'До', length: 'Від {min} до {max} діб.',
+    back: 'До', length: 'Від {min} до {max} діб.', anyOf: 'Будь-яке вільне — {class}', took: 'Ви берете: {what}',
     party: 'Скільки вас', challenge: 'Підтвердіть, що ви не робот, і спробуйте ще раз.', tooMany: 'У вас уже є кілька відкритих записів. Скасуйте один із них або зателефонуйте нам.',
     needContact: 'Вкажіть телефон або пошту, щоб ми могли з вами звʼязатися.', noScript: 'Щоб записатися онлайн, увімкніть JavaScript — або зателефонуйте нам.',
   },
@@ -112,7 +120,7 @@ const BASE = {
     pay: 'Jetzt bezahlen', payNote: 'Der Termin ist 30 Minuten reserviert. Schliessen Sie die Zahlung ab, um ihn zu behalten.',
     manage: 'Termin absagen oder verschieben', telegram: 'Erinnerungen per Telegram',
     taken: 'Diese Zeit wurde gerade vergeben — bitte wählen Sie eine andere.', failed: 'Die Buchung hat nicht geklappt. Bitte erneut versuchen oder anrufen.',
-    back: 'Bis', length: 'Von {min} bis {max} Nächte.',
+    back: 'Bis', length: 'Von {min} bis {max} Nächte.', anyOf: 'Beliebig frei — {class}', took: 'Sie nehmen: {what}',
     party: 'Wie viele Personen', challenge: 'Bitte bestätigen Sie, dass Sie kein Roboter sind, und versuchen Sie es erneut.', tooMany: 'Sie haben bereits mehrere offene Termine. Sagen Sie einen ab oder rufen Sie uns an.',
     needContact: 'Bitte Telefon oder E-Mail angeben, damit wir Sie erreichen können.', noScript: 'Für die Online-Buchung ist JavaScript nötig — oder rufen Sie uns an.',
   },
@@ -124,7 +132,7 @@ const BASE = {
     pay: 'Pay now', payNote: 'The time is held for 30 minutes. Complete the payment to keep it.',
     manage: 'Cancel or move the booking', telegram: 'Reminders in Telegram',
     taken: 'That time has just been taken — please choose another.', failed: 'That did not work. Please try again or ring us.',
-    back: 'Until', length: 'From {min} to {max} nights.',
+    back: 'Until', length: 'From {min} to {max} nights.', anyOf: 'Any free — {class}', took: 'You are taking: {what}',
     party: 'How many of you', challenge: 'Please confirm you are not a robot and try again.', tooMany: 'You already have several open bookings. Cancel one, or ring us.',
     needContact: 'Leave a phone number or an email so we can reach you.', noScript: 'Booking online needs JavaScript — or ring us.',
   },
@@ -268,6 +276,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   <div class="booking__done" data-done hidden>
     <p class="booking__done-line" data-done-line></p>
     <p class="booking__done-when" data-done-when></p>
+    <p class="booking__done-when" data-done-what hidden></p>
     <p class="booking__note" data-pay-note hidden></p>
     <p class="booking__links">
       <a data-pay hidden></a>
@@ -289,6 +298,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   type Words = Record<string, string>;
   type Slot = { start: string; free: string[]; ends?: string };
   type Offered = { slug: string; scale: string; takes: number; fewest: number; most: number };
+  type Choosable = { slug: string; title: string; marks: string; class: string };
 
   declare global {
     interface Window {
@@ -487,7 +497,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
     function showStayTotal(): void {
       const s = stay();
-      const cls = resource?.value ? classOf[resource.value] ?? '' : '';
+      const cls = classChosen() || (resourceChosen() ? classOf[resourceChosen()] ?? '' : '');
       const minor = prices[cls] ?? prices[''] ?? 0;
       if (!s || minor <= 0) { stayTotal.hidden = true; return; }
       stayTotal.textContent = `${words.total}: ` + new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: currency.toUpperCase() }).format(minor / 100);
@@ -498,6 +508,30 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
     // questions in flight, and both answers drew their buttons — the same
     // stay offered twice. Only the last one asked is drawn.
     let asking = 0;
+
+    // «class:<slug>» is «any free one of the class»; anything else a resource.
+    const classChosen = (): string => (resource?.value.startsWith('class:') ? resource.value.slice(6) : '');
+    const resourceChosen = (): string => (resource && !resource.value.startsWith('class:') ? resource.value : '');
+
+    // The choice rebuilt from the platform's answer, once: every class as
+    // «any free», then every resource by its name and its marks.
+    let offeredChoices = false;
+    function offerChoices(classes: { slug: string; title: string }[], resources: Choosable[]): void {
+      if (!resource || offeredChoices || resources.length === 0) return;
+      offeredChoices = true;
+      const was = resource.value;
+      resource.textContent = '';
+      const add = (value: string, label: string) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        resource.appendChild(option);
+      };
+      add('', words.any);
+      for (const one of classes) add('class:' + one.slug, words.anyOf.replace('{class}', one.title));
+      for (const one of resources) add(one.slug, one.marks ? `${one.title} · ${one.marks}` : one.title);
+      if ([...resource.options].some((o) => o.value === was)) resource.value = was;
+    }
 
     async function load(): Promise<void> {
       const mine = ++asking;
@@ -514,7 +548,8 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
         to: to.toISOString(),
       });
       for (const slug of picked()) params.append('service', slug);
-      if (resource?.value) params.set('resource', resource.value);
+      if (resourceChosen()) params.set('resource', resourceChosen());
+      if (classChosen()) params.set('class', classChosen());
       if (!partyField.hidden && party.value) params.set('party', party.value);
       const n = count();
       if (Number.isNaN(n)) { hint.textContent = lengthHint.textContent || words.failed; stayTotal.hidden = true; return; }
@@ -527,7 +562,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
         const data = (await answer.json()) as {
           zone: string; slots: Slot[]; party_max?: number; scale?: string;
           services?: Offered[]; prices?: Record<string, number>; class_of?: Record<string, string>; currency?: string;
+          classes?: { slug: string; title: string }[]; resources?: Choosable[];
         };
+        offerChoices(data.classes ?? [], data.resources ?? []);
         zone = data.zone;
         if (typeof data.scale === 'string') daily = data.scale === 'daily';
         offerParty(data.party_max ?? 0);
@@ -606,7 +643,8 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           body: JSON.stringify({
             service: picked()[0],
             services: picked(),
-            resource: resource?.value ?? '',
+            resource: resourceChosen(),
+            class: classChosen(),
             party: partyField.hidden ? 1 : Number(party.value) || 1,
             // How many of the service — never an end: the platform computes
             // the end and the price from it.
@@ -621,7 +659,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
         if (!answer.ok) { say(await reason(answer)); return; }
         const made = (await answer.json()) as {
           state: string; start: string; ends: string; amount_minor: number; currency: string;
-          id: string; manage_path: string; telegram_url: string;
+          id: string; manage_path: string; telegram_url: string; resource?: string; class?: string;
         };
         done(made);
       } catch {
@@ -634,7 +672,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       }
     });
 
-    function done(made: { state: string; start: string; ends: string; amount_minor: number; currency: string; id: string; manage_path: string; telegram_url: string }): void {
+    function done(made: { state: string; start: string; ends: string; amount_minor: number; currency: string; id: string; manage_path: string; telegram_url: string; resource?: string; class?: string }): void {
       for (const el of form.querySelectorAll<HTMLElement>('.field, .booking__times, .booking__services, [data-submit], [data-challenge]')) el.hidden = true;
       const box = q<HTMLElement>('[data-done]');
       box.hidden = false;
@@ -642,6 +680,16 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       q<HTMLElement>('[data-done-when]').textContent = daily
         ? `${dayOf(made.start, true)} — ${dayOf(made.ends, true)}`
         : `${new Intl.DateTimeFormat(document.documentElement.lang || 'en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone || undefined }).format(new Date(made.start))}, ${clock(made.start)}–${clock(made.ends)}`;
+
+      // What was taken: the class promised, where «any free» was chosen; the
+      // one by name and marks, where it was chosen — «VW Combi · білий ·
+      // AA1234BB». Nothing where the business has one of everything.
+      const what = made.class ? words.anyOf.replace('{class}', made.class) : resourceChosen() ? made.resource ?? '' : '';
+      if (what) {
+        const line = q<HTMLElement>('[data-done-what]');
+        line.textContent = words.took.replace('{what}', what);
+        line.hidden = false;
+      }
 
       const manage = q<HTMLAnchorElement>('[data-manage]');
       if (made.manage_path) { manage.href = made.manage_path; manage.textContent = words.manage; manage.hidden = false; }
