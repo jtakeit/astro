@@ -25,6 +25,19 @@ from `jtk/bookings.json`, pages for robots, sitemap and llms.txt, and
 `src/content/blocks.ts` — the declaration of what the owner may edit. Nothing in it
 decides how the site looks; every component is yours to replace.
 
+A business that takes bookings starts from its **kit**: read
+`jtakeit:///kits/<kind>.md` through the platform's MCP server, save the JSON under
+«The kit, whole» as a file, and pass it:
+
+```
+npx @jtakeit/astro create <slug> --locale uk --kit ./car_rental.json
+```
+
+The kit's collections, rates and settings are laid out — `blocks.ts`,
+`jtk/bookings.json`, the rates as entries in the site's language — and the services'
+listing is the booking page. What the kit leaves to the brief (the time zone, the
+prices, the cars) is printed at the end; nothing in it is made up.
+
 ## The catalogue
 
 ```

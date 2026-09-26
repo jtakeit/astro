@@ -12,6 +12,11 @@ in the platform's docs.
 
 ## Turning it on
 
+A site scaffolded with `--kit` has all of this already: the collections, the
+module pointed at them, the settings with `page` at the services' listing, and
+that listing — `src/pages/[...listing].astro` — as the booking page, the rates
+above the form. What follows is what a kit is made of, and how to do it by hand.
+
 The site's catalogue declares the module and binds two collections:
 
 ```jsonc

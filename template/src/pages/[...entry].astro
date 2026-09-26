@@ -39,6 +39,10 @@ export async function getStaticPaths() {
   const paths = [];
 
   for (const collection of COLLECTIONS) {
+    // A collection without pages — a price list, the tables of a restaurant —
+    // has none: its entries are rows of its listing (`[...listing].astro`),
+    // and the platform expects no route for them.
+    if (collection.pages === false) continue;
     const entries = await everyEntry(collection.name);
     for (const entry of entries) {
       paths.push({

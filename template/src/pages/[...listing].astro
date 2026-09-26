@@ -1,0 +1,141 @@
+---
+/**
+ * The listing of a collection without pages — and, for the diary's services,
+ * the page a visitor books on.
+ *
+ * ── why every such collection has one ───────────────────────────────────────
+ *
+ * An entry of a collection with `pages: false` — a rate, a class of cars, a
+ * restaurant's table — has no route of its own: it is a row of its listing,
+ * at the collection's prefix. The platform frames that page to show the owner
+ * an entry, and its build refuses a collection with entries and no page there
+ * (JTK_E_PAGE_NOT_BUILT), or an entry whose fields are annotated nowhere —
+ * here they carry `page:<the entry's path>:blocks[0].<field>`, which is how a
+ * row of a listing opens its own entry in the editor.
+ *
+ * ── the booking page ────────────────────────────────────────────────────────
+ *
+ * The collection the diary sells from (`MODULES.bookings.services`) is listed
+ * with the booking form under it: the rates and what they cost, then the form
+ * that books them. `jtk create --kit` points the module's `page` setting here,
+ * so the panel's *Try booking* opens it.
+ *
+ * Plain on purpose, like `[...entry].astro`: this is what makes a site built
+ * from a kit buildable on its first commit, not its design. What must survive
+ * the design pass is every `data-jtk-path`.
+ */
+import Layout from '../layouts/Layout.astro';
+import BookingForm from '../components/BookingForm.astro';
+import { Image } from 'astro:assets';
+import { BLOCKS, COLLECTIONS, LOCALE, MODULES, words, type Collection, type Field } from '../content/blocks';
+import { listed, type Entry } from '../lib/entries';
+import { isUpload, uploaded } from '../lib/uploads';
+import { photo } from '../lib/photos';
+
+export async function getStaticPaths() {
+  return COLLECTIONS.filter((one) => one.pages === false).map((collection) => ({
+    params: { listing: collection.prefix.replace(/^\//, '') },
+    props: { collection },
+  }));
+}
+
+const { collection } = Astro.props as { collection: Collection };
+const entries: Entry[] = await listed(collection.name);
+const type = BLOCKS.find((one) => one.type === collection.type);
+
+// The fields a row shows: those the owner edits by tapping them. The rest —
+// a select, a number, a list of hours — are edited in the panel beside it.
+const TAPPABLE = new Set(['text', 'textarea', 'money', 'duration', 'media']);
+const shown: Field[] = (type?.fields ?? []).filter(
+  (field) => TAPPABLE.has(field.kind) && field.client_editable !== false && field.no_tap_target !== true && field.multiple !== true,
+);
+
+const lang = LOCALE.slice(0, 2);
+const settingsFiles = import.meta.glob<{ blocks?: Record<string, unknown>[] }>('/jtk/bookings.json', { eager: true, import: 'default' });
+const settings = Object.values(settingsFiles)[0]?.blocks?.[0] ?? {};
+const siteFiles = import.meta.glob<{ business?: { currency?: string } }>('/jtk/site.json', { eager: true, import: 'default' });
+const currency = Object.values(siteFiles)[0]?.business?.currency ?? '';
+
+/** A length as the trade says it: whole days, whole hours, or minutes. */
+function length(minutes: number): string {
+  const [unit, n] = minutes % 1440 === 0 ? ['day', minutes / 1440] : minutes % 60 === 0 ? ['hour', minutes / 60] : ['minute', minutes];
+  return new Intl.NumberFormat(LOCALE, { style: 'unit', unit, unitDisplay: 'long' }).format(n);
+}
+
+function money(minor: number): string {
+  return currency
+    ? new Intl.NumberFormat(LOCALE, { style: 'currency', currency: currency.toUpperCase() }).format(minor / 100)
+    : new Intl.NumberFormat(LOCALE).format(minor / 100);
+}
+
+const bookings = MODULES.bookings;
+const sells = bookings?.services === collection.name;
+const form = sells
+  ? {
+      services: entries
+        .filter((entry) => typeof entry.data.takes === 'number')
+        .map((entry) => ({
+          slug: entry.id,
+          title: String(entry.data.title ?? entry.id),
+          takes: entry.data.takes as number,
+          costs: typeof entry.data.costs === 'number' ? entry.data.costs : undefined,
+          group: typeof entry.data.group === 'string' ? entry.data.group : undefined,
+        })),
+      resources: bookings?.resources
+        ? (await listed(bookings.resources)).map((entry) => ({ slug: entry.id, title: String(entry.data.title ?? entry.id) }))
+        : [],
+    }
+  : undefined;
+
+const heading = words(collection.label);
+---
+
+<Layout title={heading} description="">
+  <main id="content">
+    <section class="listing">
+      <h1>{heading}</h1>
+      <ul class="listing-rows">
+        {
+          entries.map((entry) => {
+            const at = `${collection.prefix}/${entry.id}`;
+            return (
+              <li class="listing-row">
+                {shown.map((field) => {
+                  const value = entry.data[field.key];
+                  if (value === undefined || value === null || value === '') return null;
+                  const path = `page:${at}:blocks[0].${field.key}`;
+                  if (field.kind === 'media') {
+                    const src = String(value);
+                    const file = isUpload(src) ? uploaded(src) : photo(src);
+                    if (!file) return null;
+                    return <Image src={file} alt={String(entry.data.title ?? '')} data-jtk-path={path} widths={[480, 960]} sizes="(min-width: 900px) 20rem, 92vw" layout="none" />;
+                  }
+                  if (field.kind === 'duration') return <span data-jtk-path={path}>{length(Number(value))}</span>;
+                  if (field.kind === 'money') return <span data-jtk-path={path}>{money(Number(value))}</span>;
+                  if (field.key === 'title') return <h2 data-jtk-path={path}>{String(value)}</h2>;
+                  return <p data-jtk-path={path}>{String(value)}</p>;
+                })}
+              </li>
+            );
+          })
+        }
+      </ul>
+    </section>
+
+    {
+      form && form.services.length > 0 && (
+        <section class="listing-book">
+          <BookingForm
+            services={form.services}
+            resources={form.resources}
+            locale={(['uk', 'de', 'en'].includes(lang) ? lang : 'en') as 'uk' | 'de' | 'en'}
+            combine={settings.combine === true}
+            scale={typeof settings.scale === 'string' ? settings.scale : ''}
+            kind={typeof settings.kind === 'string' ? settings.kind : ''}
+            currency={currency || undefined}
+          />
+        </section>
+      )
+    }
+  </main>
+</Layout>
