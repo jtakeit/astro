@@ -44,6 +44,7 @@ const services = (await listed('services')).map((e) => ({
 const masters  = (await listed('masters')).map((e) => ({ slug: e.id, title: String(e.data.title) }));
 const combine  = bookings.blocks[0].combine === true;                  // jtk/bookings.json, the owner's setting
 const scale    = bookings.blocks[0].scale ?? '';                      // 'daily' for a business that lets things by the day
+const kind     = bookings.blocks[0].kind ?? '';                       // 'car_rental', 'clinic'… — whose words the form speaks
 ```
 
 An entry is `{ id, data }` — the slug and the block's fields — which is what
@@ -57,8 +58,17 @@ booking*. Empty means the front page.
 
 ```ts
 ---
-<BookingForm services={services} resources={masters} locale="de" combine={combine} scale={scale} currency="CHF" />
+<BookingForm services={services} resources={masters} locale="de" combine={combine} scale={scale} kind={kind} currency="CHF" />
 ```
+
+The words that depend on the kind of business — «Записатися» or «Орендувати»,
+«Майстер» or «Авто», «Ви записані» or «Оренду підтверджено» — are the
+platform's: its availability answer carries them as `words`, in every
+language, from the kind's dictionary with the site's own `words` over them.
+The form asks for them as soon as it loads, and uses them from every answer.
+Its own are a salon's, which is what a site with no `kind` is; so with `kind`
+set to anything else those few words are held back until the platform has
+said them, and shown in the salon's only if it does not answer at all.
 
 With `combine` on — the module's setting, the owner's to flip — the services
 are a checklist under their `group` headings with a running total of minutes

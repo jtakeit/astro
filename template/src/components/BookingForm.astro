@@ -86,9 +86,20 @@ interface Props {
    * this decides the words drawn before it has answered.
    */
   scale?: string;
+  /**
+   * The kind of business — the module's `kind`, read from `jtk/bookings.json`.
+   * The words that depend on it — «Записатися» or «Орендувати», «Майстер» or
+   * «Авто» — are the platform's, in its availability answer, with the site's
+   * own over them; this page has only a salon's, which is what a site with no
+   * kind is. So for any other kind those few words are held back until the
+   * platform has said them, rather than shown in a salon's for a moment — or
+   * for good, when the platform does not answer.
+   */
+  kind?: string;
 }
 
-const { services, resources = [], locale, daysAhead = 30, combine = false, currency = 'CHF', scale = '' } = Astro.props;
+const { services, resources = [], locale, daysAhead = 30, combine = false, currency = 'CHF', scale = '', kind = '' } = Astro.props;
+const unsaid = kind !== '' && kind !== 'salon';
 
 // The checklist's runs, in the order the services came, each heading once.
 const runs: { group: string; items: Named[] }[] = [];
@@ -168,8 +179,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 ---
 
 <form
-  class="booking"
+  class:list={['booking', unsaid && 'booking--unsaid']}
   data-booking
+  data-locale={locale}
   data-currency={currency}
   data-words={JSON.stringify(WORDS)}
   data-scale={scale}
@@ -181,7 +193,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   <div class="field">
     {combine ? (
       <fieldset class="booking__services" data-services>
-        <legend class="field__label">{WORDS.services}</legend>
+        <legend class="field__label" data-say="services">{WORDS.services}</legend>
         {runs.map((run) => (
           <div class="booking__run">
             {run.group !== '' && <p class="booking__run-title">{run.group}</p>}
@@ -201,7 +213,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       </fieldset>
     ) : (
       <>
-        <label class="field__label" for="booking-service">{WORDS.service}</label>
+        <label class="field__label" for="booking-service" data-say="service">{WORDS.service}</label>
         <select class="field__input" id="booking-service" name="service" required>
           {services.map((one) => <option value={one.slug}>{one.title}</option>)}
         </select>
@@ -211,9 +223,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
   {resources.length > 1 && (
     <div class="field">
-      <label class="field__label" for="booking-resource">{WORDS.resource}</label>
-      <select class="field__input" id="booking-resource" name="resource">
-        <option value="">{WORDS.any}</option>
+      <label class="field__label" for="booking-resource" data-say="resource">{WORDS.resource}</label>
+      <select class="field__input" id="booking-resource" name="resource" data-say-wait>
+        <option value="" data-say="any">{WORDS.any}</option>
         {resources.map((one) => <option value={one.slug}>{one.title}</option>)}
       </select>
     </div>
@@ -271,7 +283,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
   <p class="field__error" data-booking-error hidden></p>
 
-  <button class="booking__submit" type="submit" data-submit>{WORDS.book}</button>
+  <button class="booking__submit" type="submit" data-submit data-say="book">{WORDS.book}</button>
 
   <div class="booking__done" data-done hidden>
     <p class="booking__done-line" data-done-line></p>
@@ -352,6 +364,49 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
     const backField = q<HTMLElement>('[data-back-field]');
     const lengthHint = q<HTMLElement>('[data-length]');
     const stayTotal = q<HTMLElement>('[data-stay-total]');
+
+    // The words that depend on the kind of business, as the platform says
+    // them: its availability answer carries the form's, in every language,
+    // the site's own over the kind's. Heard from every answer, and asked for
+    // once at the start, so they are there before anybody has picked a day.
+    // A platform that says none leaves the words the page was built with.
+    const SAID: Record<string, string> = {
+      'form.service': 'service', 'form.services': 'services', 'form.resource': 'resource', 'form.any': 'any',
+      'form.book': 'book', 'form.sending': 'sending', 'form.confirmed': 'confirmed', 'form.pending': 'pending',
+      'form.manage': 'manage', 'form.failed': 'failed', 'form.tooMany': 'tooMany', 'form.length': 'length',
+    };
+    const lang = form.dataset.locale ?? 'en';
+    function hear(all?: Record<string, Record<string, string>>): void {
+      const mine = all?.[lang] ?? all?.en;
+      if (mine) {
+        for (const [key, name] of Object.entries(SAID)) if (mine[key]) words[name] = mine[key];
+        for (const el of form.querySelectorAll<HTMLElement>('[data-say]')) {
+          // A button mid-send says «sending»; it says «book» again when done.
+          if (el instanceof HTMLButtonElement && el.disabled) continue;
+          el.textContent = words[el.dataset.say ?? ''] ?? el.textContent;
+        }
+      }
+      form.classList.remove('booking--unsaid');
+    }
+    // Held back at most this long: a platform that is slow to answer is not
+    // a reason for a form without a button.
+    setTimeout(() => form.classList.remove('booking--unsaid'), 3000);
+    {
+      const first = select?.options[0]?.value ?? boxes[0]?.value ?? '';
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(from);
+      to.setDate(to.getDate() + 1);
+      if (first) {
+        const params = new URLSearchParams({ service: first, from: from.toISOString(), to: to.toISOString() });
+        void fetch(api + 'availability?' + params.toString(), { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : {}))
+          .then((data: { words?: Record<string, Record<string, string>> }) => hear(data.words))
+          .catch(() => hear());
+      } else {
+        hear();
+      }
+    }
 
     // What the platform said each service may be taken as, and the prices of
     // what was last asked — from the answer, never from the build.
@@ -535,6 +590,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
         const option = document.createElement('option');
         option.value = value;
         option.textContent = label;
+        if (value === '') option.dataset.say = 'any';
         resource.appendChild(option);
       };
       add('', words.any);
@@ -573,7 +629,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           zone: string; slots: Slot[]; party_max?: number; scale?: string;
           services?: Offered[]; prices?: Record<string, number>; class_of?: Record<string, string>; currency?: string;
           classes?: { slug: string; title: string }[]; resources?: Choosable[];
+          words?: Record<string, Record<string, string>>;
         };
+        hear(data.words);
         offerChoices(data.classes ?? [], data.resources ?? []);
         zone = data.zone;
         if (typeof data.scale === 'string') daily = data.scale === 'daily';
@@ -732,6 +790,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
 <style>
   .booking { display: grid; gap: var(--space-4, 1rem); max-width: 34rem; }
+  /* The kind's words, until the platform has said them: the space kept, the
+     salon's word not shown at a car rental. */
+  .booking--unsaid [data-say], .booking--unsaid [data-say-wait] { visibility: hidden; }
   .booking__times { border: 0; padding: 0; margin: 0; }
   .booking__services { border: 0; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
   .booking__run { display: grid; gap: 0.35rem; }
