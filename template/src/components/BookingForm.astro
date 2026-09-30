@@ -259,7 +259,9 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
 
   <fieldset class="field booking__times" data-times>
     <legend class="field__label">{WORDS.time}</legend>
-    <p class="booking__hint" data-times-hint>{WORDS.pick}</p>
+    {/* Heard as it changes — «…», then what is free or that nothing is: a
+        visitor who cannot see the buttons appear is told they did. */}
+    <p class="booking__hint" data-times-hint aria-live="polite">{WORDS.pick}</p>
     <div class="booking__slots" data-slots></div>
     <p class="booking__total" data-stay-total hidden></p>
   </fieldset>
@@ -284,11 +286,16 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   {/* Turnstile renders here when /api/turnstile hands the page a key. */}
   <div class="booking__challenge" data-challenge hidden></div>
 
-  <p class="field__error" data-booking-error hidden></p>
+  {/* An alert: a refusal said the moment it is, not found later by
+      somebody reading the page from the top. */}
+  <p class="field__error" data-booking-error role="alert" hidden></p>
 
   <button class="booking__submit" type="submit" data-submit data-say="book">{WORDS.book}</button>
 
-  <div class="booking__done" data-done hidden>
+  {/* Where the focus goes when it is sent: the fields and the button are
+      hidden then, and a focus left on a hidden button is a visitor put back
+      at the top of the page with nothing said. */}
+  <div class="booking__done" data-done role="status" tabindex="-1" hidden>
     <p class="booking__done-line" data-done-line></p>
     <p class="booking__done-when" data-done-when></p>
     <p class="booking__done-when" data-done-what hidden></p>
@@ -662,13 +669,19 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'booking__slot';
+          // Which one is chosen, said as well as drawn.
+          button.setAttribute('aria-pressed', 'false');
           button.textContent = daily
             ? slot.ends ? `${dayAndHour(slot.start, false)} — ${dayAndHour(slot.ends, false)}` : dayAndHour(slot.start, false)
             : clock(slot.start);
           button.addEventListener('click', () => {
             chosen = slot.start;
-            for (const other of slots.querySelectorAll('.booking__slot')) other.classList.remove('is-chosen');
+            for (const other of slots.querySelectorAll('.booking__slot')) {
+              other.classList.remove('is-chosen');
+              other.setAttribute('aria-pressed', 'false');
+            }
             button.classList.add('is-chosen');
+            button.setAttribute('aria-pressed', 'true');
             say('');
           });
           slots.appendChild(button);
@@ -747,6 +760,8 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       for (const el of form.querySelectorAll<HTMLElement>('.field, .booking__times, .booking__services, [data-submit], [data-challenge]')) el.hidden = true;
       const box = q<HTMLElement>('[data-done]');
       box.hidden = false;
+      // After the lines are written below — see the end of this function.
+      queueMicrotask(() => box.focus());
       q<HTMLElement>('[data-done-line]').textContent = made.state === 'confirmed' ? words.confirmed : words.pending;
       q<HTMLElement>('[data-done-when]').textContent = daily
         ? `${dayAndHour(made.start, true)} — ${dayAndHour(made.ends, true)}`
