@@ -187,10 +187,17 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   data-scale={scale}
   data-api={under('/api/')}
   novalidate
+  data-jtk-fixed
 >
   {/* Without a script the form cannot ask the platform for the business's
       words, so this sentence names no kind of booking at all: «записатися»
       here was a salon's word on a car rental's page. */}
+  {/* Fixed, the whole form, as the lead form's labels are: every word in it
+      is the platform's — spoken in the business's kind from the availability
+      answer, «Забронювати» over the build's «Записатися» — or an entry's own
+      title, which the owner edits on the entry. None is the owner's to edit
+      here, and `jtk catalogue` asked whose all seventeen were on a fresh
+      restaurant (30 September 2026). */}
   <noscript><p class="booking__note">{WORDS.noScript}</p></noscript>
 
   <div class="field">

@@ -31,7 +31,7 @@
 import { everyEntry, rendered } from '../lib/entries';
 import { Image } from 'astro:assets';
 import Layout from '../layouts/Layout.astro';
-import { COLLECTIONS } from '../content/blocks';
+import { BLOCKS, COLLECTIONS } from '../content/blocks';
 import { isUpload, uploaded } from '../lib/uploads';
 import { photo } from '../lib/photos';
 
@@ -54,7 +54,17 @@ export async function getStaticPaths() {
   return paths;
 }
 
-const { entry } = Astro.props;
+const { entry, collection } = Astro.props;
+
+/*
+ * Whether this entry's type has a body at all. A post has; a car, a doctor, an
+ * apartment has not — its page is its fields — and a body drawn for one was an
+ * editable place the catalogue does not declare: the admin would open an
+ * editor on nothing, and `jtk catalogue` said so for every car of a rental
+ * (30 September 2026).
+ */
+const hasBody = (BLOCKS.find((one) => one.type === collection.type)?.fields ?? [])
+  .some((field) => field.key === 'body');
 const data = entry.data as Record<string, unknown>;
 const { Content } = await rendered(entry);
 
@@ -135,7 +145,7 @@ const schema = {
         editor opens it full screen — nine hundred words is not a popover — and
         what is inside is markdown Astro rendered, pictures and all.
       */}
-      <div class="entry-body" data-jtk-path="blocks[0].body"><Content /></div>
+      {hasBody && <div class="entry-body" data-jtk-path="blocks[0].body"><Content /></div>}
 
       {/*
         And the rest of the post, in the order the owner put it in.

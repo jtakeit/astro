@@ -93,7 +93,9 @@ const heading = words(collection.label);
 <Layout title={heading} description="">
   <main id="content">
     <section class="listing">
-      <h1>{heading}</h1>
+      {/* The collection's own name, from the catalogue: the repository's, not a
+          field of any entry — fixed, as the check asks it to be said. */}
+      <h1 data-jtk-fixed>{heading}</h1>
       <ul class="listing-rows">
         {
           entries.map((entry) => {
