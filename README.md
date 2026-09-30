@@ -35,8 +35,11 @@ npx @jtakeit/astro create <slug> --locale uk --kit ./car_rental.json
 
 The kit's collections, rates and settings are laid out — `blocks.ts`,
 `jtk/bookings.json`, the rates as entries in the site's language — and the services'
-listing is the booking page. What the kit leaves to the brief (the time zone, the
-prices, the cars) is printed at the end; nothing in it is made up.
+listing is the booking page — the kit whole, nothing left out quietly. What it
+leaves to the brief (the time zone, the prices, the cars) is printed at the end,
+with where to read what it chose for the business — confirmation, cancellation,
+payment, hand-over hours — to be said back to the developer and confirmed
+(`jtakeit:///guides/the-brief.md`). Nothing in it is made up.
 
 ## The catalogue
 
