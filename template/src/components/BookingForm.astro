@@ -826,11 +826,15 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   .booking__service-meta { font-size: 0.85em; opacity: 0.7; white-space: nowrap; }
   .booking__total { margin: 0.25rem 0 0; font-weight: 600; }
   .booking__slots { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .booking__slot {
+  /* The slots are made by the script, which gives them none of this
+     component's scope attribute: a scoped `.booking__slot` matched nothing,
+     and the chosen time looked like every other (1 October 2026). Global
+     under the scoped list, so they are styled and nothing else is. */
+  .booking__slots :global(.booking__slot) {
     font: inherit; padding: 0.45rem 0.75rem; border-radius: var(--radius-sm, 0.5rem);
     border: 1px solid var(--color-line, currentColor); background: transparent; color: inherit; cursor: pointer;
   }
-  .booking__slot.is-chosen { background: var(--color-ink, #111); color: var(--color-bg, #fff); border-color: var(--color-ink, #111); }
+  .booking__slots :global(.booking__slot.is-chosen) { background: var(--color-ink, #111); color: var(--color-bg, #fff); border-color: var(--color-ink, #111); }
   .booking__hint, .booking__note { margin: 0; opacity: 0.75; }
   .booking__links { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin: 0; }
   .booking__done-line { font-weight: 600; margin: 0; }

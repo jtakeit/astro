@@ -32,6 +32,20 @@ try {
   const de = readFileSync(join(site, 'src/copy/de-CH.ts'), 'utf8');
   if (!de.includes('Zum Inhalt springen')) fail('the copy is not in the site\'s language');
 
+  // An element a script makes carries none of Astro's scope attribute, so a
+  // scoped rule for its class matches nothing: the booking form's time slots
+  // were bare browser buttons and the chosen one looked like the rest
+  // (vatra-kyiv, 1 October 2026). Such a class is styled through :global().
+  for (const f of walk(join(site, 'src'))) {
+    if (!f.endsWith('.astro')) continue;
+    const body = readFileSync(f, 'utf8');
+    const scoped = [...body.matchAll(/<style(?![^>]*is:global)[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
+    for (const [, made] of body.matchAll(/\.className\s*=\s*['"]([\w-]+)['"]/g)) {
+      const rule = new RegExp(`(^|[\\s,}])\\.${made}(?![\\w-])`, 'm');
+      if (rule.test(scoped.replace(/:global\([^)]*\)/g, ''))) fail(`${f}: .${made} is made by a script and styled scoped — it matches nothing; use :global(.${made})`);
+    }
+  }
+
   // The catalogue tool, on the scaffold it just wrote: the file is emitted, and
   // a module the site turns on gets its settings seeded in the platform's one
   // shape — once, never over a file that is already there.
