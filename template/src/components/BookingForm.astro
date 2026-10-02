@@ -176,6 +176,15 @@ const WORDS = scale === 'daily' ? { ...BASE, ...DAYS } : BASE;
 
 const today = new Date().toISOString().slice(0, 10);
 const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
+
+/*
+ * What this form sends to /api/book, said on the page. Preflight reads it off
+ * the built page and books in exactly this shape, so a form that sends
+ * `units` for nights, or never sends `count`, fails the check rather than
+ * passing on a request the platform made up (2 October 2026). The script
+ * sends no key that is not here — the list cannot drift from the request.
+ */
+const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'start', 'name', 'phone', 'email', 'note', 'turnstile'];
 ---
 
 <form
@@ -186,6 +195,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
   data-words={JSON.stringify(WORDS)}
   data-scale={scale}
   data-api={under('/api/')}
+  data-sends={SENDS.join(',')}
   novalidate
   data-jtk-fixed
 >
@@ -819,23 +829,34 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
       submit.disabled = true;
       submit.textContent = words.sending;
       try {
+        const body: Record<string, unknown> = {
+          service: picked()[0],
+          services: picked(),
+          resource: resourceChosen(),
+          class: classChosen(),
+          party: partyField.hidden ? 1 : Number(party.value) || 1,
+          // How many of the service — never an end: the platform computes
+          // the end and the price from it.
+          ...(count() ? { count: count() } : {}),
+          start: chosen,
+          name, phone, email,
+          note: String(data.get('note') ?? ''),
+          turnstile: turnstileToken,
+        };
+        // Only what the form says it sends (`data-sends`), which is what
+        // preflight books with: a key added here and not there is dropped,
+        // and said, rather than sent unchecked.
+        const sends = new Set((form.dataset.sends ?? '').split(','));
+        for (const key of Object.keys(body)) {
+          if (!sends.has(key)) {
+            console.error(`booking form: "${key}" is not in data-sends, so it is not sent`);
+            delete body[key];
+          }
+        }
         const answer = await fetch(api + 'book', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            service: picked()[0],
-            services: picked(),
-            resource: resourceChosen(),
-            class: classChosen(),
-            party: partyField.hidden ? 1 : Number(party.value) || 1,
-            // How many of the service — never an end: the platform computes
-            // the end and the price from it.
-            ...(count() ? { count: count() } : {}),
-            start: chosen,
-            name, phone, email,
-            note: String(data.get('note') ?? ''),
-            turnstile: turnstileToken,
-          }),
+          body: JSON.stringify(body),
         });
         if (answer.status === 409) { say(words.taken); await load(); return; }
         if (!answer.ok) { say(await reason(answer)); return; }
