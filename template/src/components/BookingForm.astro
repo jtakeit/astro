@@ -120,7 +120,7 @@ const BASE = {
     pay: 'Оплатити', payNote: 'Час зарезервовано на 30 хвилин. Щоб закріпити його, завершіть оплату.',
     manage: 'Скасувати або перенести запис', telegram: 'Нагадування в Telegram',
     taken: 'Цей час щойно зайняли — оберіть інший.', failed: 'Не вдалося записатися. Спробуйте ще раз або зателефонуйте.',
-    back: 'До', length: 'Від {min} до {max} діб.', anyOf: 'Будь-яке вільне — {class}', noneOf: '{class} — немає вільних', took: 'Ви берете: {what}',
+    back: 'До', length: 'Від {min} до {max} діб.', anyOf: 'Будь-яке вільне — {class}', noneOf: '{class} — немає вільних', notFor: '{who} — не для обраного', notForChosen: '{who} — не для обраного. Оберіть іншого або «{any}».', took: 'Ви берете: {what}',
     party: 'Скільки вас', hours: 'Скільки часу', hourShort: 'год', minuteShort: 'хв', challenge: 'Підтвердіть, що ви не робот, і спробуйте ще раз.', tooMany: 'У вас уже є кілька відкритих записів. Скасуйте один із них або зателефонуйте нам.',
     needContact: 'Вкажіть телефон або пошту, щоб ми могли з вами звʼязатися.', noScript: 'Онлайн-форма працює з увімкненим JavaScript — увімкніть його або зателефонуйте нам.',
   },
@@ -132,7 +132,7 @@ const BASE = {
     pay: 'Jetzt bezahlen', payNote: 'Der Termin ist 30 Minuten reserviert. Schliessen Sie die Zahlung ab, um ihn zu behalten.',
     manage: 'Termin absagen oder verschieben', telegram: 'Erinnerungen per Telegram',
     taken: 'Diese Zeit wurde gerade vergeben — bitte wählen Sie eine andere.', failed: 'Die Buchung hat nicht geklappt. Bitte erneut versuchen oder anrufen.',
-    back: 'Bis', length: 'Von {min} bis {max} Nächte.', anyOf: 'Beliebig frei — {class}', noneOf: '{class} — nichts verfügbar', took: 'Sie nehmen: {what}',
+    back: 'Bis', length: 'Von {min} bis {max} Nächte.', anyOf: 'Beliebig frei — {class}', noneOf: '{class} — nichts verfügbar', notFor: '{who} — nicht für diese Auswahl', notForChosen: '{who} — nicht für diese Auswahl. Bitte jemand anderen oder «{any}» wählen.', took: 'Sie nehmen: {what}',
     party: 'Wie viele Personen', hours: 'Wie lange', hourShort: 'Std.', minuteShort: 'Min.', challenge: 'Bitte bestätigen Sie, dass Sie kein Roboter sind, und versuchen Sie es erneut.', tooMany: 'Sie haben bereits mehrere offene Termine. Sagen Sie einen ab oder rufen Sie uns an.',
     needContact: 'Bitte Telefon oder E-Mail angeben, damit wir Sie erreichen können.', noScript: 'Für die Online-Buchung ist JavaScript nötig — oder rufen Sie uns an.',
   },
@@ -144,7 +144,7 @@ const BASE = {
     pay: 'Pay now', payNote: 'The time is held for 30 minutes. Complete the payment to keep it.',
     manage: 'Cancel or move the booking', telegram: 'Reminders in Telegram',
     taken: 'That time has just been taken — please choose another.', failed: 'That did not work. Please try again or ring us.',
-    back: 'Until', length: 'From {min} to {max} nights.', anyOf: 'Any free — {class}', noneOf: '{class} — none available', took: 'You are taking: {what}',
+    back: 'Until', length: 'From {min} to {max} nights.', anyOf: 'Any free — {class}', noneOf: '{class} — none available', notFor: '{who} — not for this choice', notForChosen: '{who} — not for this choice. Pick another, or «{any}».', took: 'You are taking: {what}',
     party: 'How many of you', hours: 'How long', hourShort: 'h', minuteShort: 'min', challenge: 'Please confirm you are not a robot and try again.', tooMany: 'You already have several open bookings. Cancel one, or ring us.',
     needContact: 'Leave a phone number or an email so we can reach you.', noScript: 'Booking online needs JavaScript — or ring us.',
   },
@@ -348,7 +348,9 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
   type Words = Record<string, string>;
   type Slot = { start: string; free: string[]; ends?: string };
   type Offered = { slug: string; scale: string; takes: number; fewest: number; most: number };
-  type Choosable = { slug: string; title: string; marks: string; class: string };
+  // `performs` is whether it does everything asked; a platform before
+  // 2 October 2026 does not say, and every one is offered as it was.
+  type Choosable = { slug: string; title: string; marks: string; class: string; performs?: boolean };
 
   declare global {
     interface Window {
@@ -658,14 +660,15 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
     const classChosen = (): string => (resource?.value.startsWith('class:') ? resource.value.slice(6) : '');
     const resourceChosen = (): string => (resource && !resource.value.startsWith('class:') ? resource.value : '');
 
-    // The choice rebuilt from the platform's answer, once: every class as
-    // «any free», then every resource by its name and its marks. A class
-    // nothing is in is said and cannot be chosen: offered as «any free», it
-    // answered «nothing free» on every day, as if another might be different.
-    let offeredChoices = false;
+    // The choice rebuilt from every answer: every class as «any free», then
+    // every resource by its name and its marks. A class nothing is in is said
+    // and cannot be chosen: offered as «any free», it answered «nothing free»
+    // on every day, as if another might be different. So is a master who
+    // does not do what is asked — and the answer changes with the service,
+    // which is why it is rebuilt each time (2 October 2026). One already
+    // chosen stays chosen, said, rather than swapped for somebody else.
     function offerChoices(classes: { slug: string; title: string }[], resources: Choosable[], empty: { slug: string; title: string }[] = []): void {
-      if (!resource || offeredChoices || resources.length === 0) return;
-      offeredChoices = true;
+      if (!resource || resources.length === 0) return;
       const was = resource.value;
       resource.textContent = '';
       const add = (value: string, label: string, disabled = false) => {
@@ -679,8 +682,18 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
       add('', words.any);
       for (const one of classes) add('class:' + one.slug, words.anyOf.replace('{class}', one.title));
       for (const one of empty) add('empty:' + one.slug, words.noneOf.replace('{class}', one.title), true);
-      for (const one of resources) add(one.slug, one.marks ? `${one.title} · ${one.marks}` : one.title);
+      for (const one of resources) {
+        const name = one.marks ? `${one.title} · ${one.marks}` : one.title;
+        add(one.slug, one.performs === false ? words.notFor.replace('{who}', name) : name, one.performs === false);
+      }
       if ([...resource.options].some((o) => o.value === was)) resource.value = was;
+    }
+
+    // The resource chosen, if it does not do what is asked: its name, for
+    // saying so in place of «nothing free on this day».
+    function chosenNotFor(resources: Choosable[]): string {
+      const one = resources.find((r) => r.slug === resourceChosen());
+      return one && one.performs === false ? one.title : '';
     }
 
     // A service nobody performs — a salon's service no master does — is said
@@ -771,7 +784,10 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
           // a place for it either (the night run of 2 October 2026).
           const seats = data.party_seats ?? 0;
           const asked = partyField.hidden ? 1 : Number(party.value);
-          hint.textContent = seats > 0 && asked > seats ? words.noParty : words.none;
+          // Nor is a master who does not do what was asked (2 October 2026).
+          const notFor = chosenNotFor(data.resources ?? []);
+          hint.textContent = notFor ? words.notForChosen.replace('{who}', notFor).replace('{any}', words.any)
+            : seats > 0 && asked > seats ? words.noParty : words.none;
           return;
         }
         hint.textContent = '';
