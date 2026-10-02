@@ -114,7 +114,7 @@ const BASE = {
   uk: {
     service: 'Послуга', services: 'Послуги', total: 'Разом', pickService: 'Оберіть хоча б одну послугу.', resource: 'Майстер', any: 'Будь-хто', day: 'День', time: 'Час',
     name: "Ім'я", phone: 'Телефон', email: 'Електронна пошта', note: 'Коментар',
-    book: 'Записатися', sending: 'Записуємо…', none: 'У цей день вільного часу немає.',
+    book: 'Записатися', sending: 'Записуємо…', none: 'У цей день вільного часу немає.', noParty: 'Немає вільних місць для такої компанії.',
     pick: 'Оберіть день', confirmed: 'Ви записані.', pending: 'Запис отримано — ми підтвердимо його найближчим часом.',
     pay: 'Оплатити', payNote: 'Час зарезервовано на 30 хвилин. Щоб закріпити його, завершіть оплату.',
     manage: 'Скасувати або перенести запис', telegram: 'Нагадування в Telegram',
@@ -126,7 +126,7 @@ const BASE = {
   de: {
     service: 'Leistung', services: 'Leistungen', total: 'Zusammen', pickService: 'Bitte mindestens eine Leistung wählen.', resource: 'Bei', any: 'Egal wer', day: 'Tag', time: 'Uhrzeit',
     name: 'Name', phone: 'Telefon', email: 'E-Mail', note: 'Bemerkung',
-    book: 'Termin buchen', sending: 'Wird gebucht…', none: 'An diesem Tag ist nichts frei.',
+    book: 'Termin buchen', sending: 'Wird gebucht…', none: 'An diesem Tag ist nichts frei.', noParty: 'Für so viele Personen gibt es keinen freien Platz.',
     pick: 'Wählen Sie einen Tag', confirmed: 'Ihr Termin ist gebucht.', pending: 'Anfrage erhalten — wir bestätigen den Termin in Kürze.',
     pay: 'Jetzt bezahlen', payNote: 'Der Termin ist 30 Minuten reserviert. Schliessen Sie die Zahlung ab, um ihn zu behalten.',
     manage: 'Termin absagen oder verschieben', telegram: 'Erinnerungen per Telegram',
@@ -138,7 +138,7 @@ const BASE = {
   en: {
     service: 'Service', services: 'Services', total: 'Total', pickService: 'Pick at least one service.', resource: 'With', any: 'Anyone', day: 'Day', time: 'Time',
     name: 'Name', phone: 'Phone', email: 'Email', note: 'Note',
-    book: 'Book', sending: 'Booking…', none: 'Nothing is free on that day.',
+    book: 'Book', sending: 'Booking…', none: 'Nothing is free on that day.', noParty: 'There is no place for a party this large.',
     pick: 'Choose a day', confirmed: 'You are booked.', pending: 'Received — we will confirm shortly.',
     pay: 'Pay now', payNote: 'The time is held for 30 minutes. Complete the payment to keep it.',
     manage: 'Cancel or move the booking', telegram: 'Reminders in Telegram',
@@ -725,7 +725,7 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
         if (!answer.ok) throw new Error(await answer.text());
         if (mine !== asking) return;
         const data = (await answer.json()) as {
-          zone: string; slots: Slot[]; party_max?: number; scale?: string;
+          zone: string; slots: Slot[]; party_max?: number; party_seats?: number; scale?: string;
           services?: Offered[]; prices?: Record<string, number>; class_of?: Record<string, string>; currency?: string;
           classes?: { slug: string; title: string }[]; resources?: Choosable[];
           empty_classes?: { slug: string; title: string }[];
@@ -754,7 +754,11 @@ const last = new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0
           showStayTotal();
         }
         if (data.slots.length === 0) {
-          hint.textContent = words.none;
+          // A party larger than any table is not a busy day: no other day has
+          // a place for it either (the night run of 2 October 2026).
+          const seats = data.party_seats ?? 0;
+          const asked = partyField.hidden ? 1 : Number(party.value);
+          hint.textContent = seats > 0 && asked > seats ? words.noParty : words.none;
           return;
         }
         hint.textContent = '';
