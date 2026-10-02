@@ -31,6 +31,7 @@ import { BLOCKS, COLLECTIONS, LOCALE, MODULES, words, type Collection, type Fiel
 import { listed, type Entry } from '../lib/entries';
 import { isUpload, uploaded } from '../lib/uploads';
 import { photo } from '../lib/photos';
+import { money as priced } from '../lib/money';
 
 export async function getStaticPaths() {
   return COLLECTIONS.filter((one) => one.pages === false).map((collection) => ({
@@ -62,11 +63,7 @@ function length(minutes: number): string {
   return new Intl.NumberFormat(LOCALE, { style: 'unit', unit, unitDisplay: 'long' }).format(n);
 }
 
-function money(minor: number): string {
-  return currency
-    ? new Intl.NumberFormat(LOCALE, { style: 'currency', currency: currency.toUpperCase() }).format(minor / 100)
-    : new Intl.NumberFormat(LOCALE).format(minor / 100);
-}
+const money = (minor: number): string => priced(minor, currency, LOCALE);
 
 const bookings = MODULES.bookings;
 const sells = bookings?.services === collection.name;

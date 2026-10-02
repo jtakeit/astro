@@ -34,6 +34,7 @@ import Layout from '../layouts/Layout.astro';
 import { BLOCKS, COLLECTIONS, LOCALE, MODULES, words, type Field } from '../content/blocks';
 import { isUpload, uploaded } from '../lib/uploads';
 import { photo } from '../lib/photos';
+import { money as priced } from '../lib/money';
 
 export async function getStaticPaths() {
   const paths = [];
@@ -124,11 +125,7 @@ function length(minutes: number): string {
   return new Intl.NumberFormat(LOCALE, { style: 'unit', unit, unitDisplay: 'long' }).format(n);
 }
 
-function money(minor: number): string {
-  return currency
-    ? new Intl.NumberFormat(LOCALE, { style: 'currency', currency: currency.toUpperCase() }).format(minor / 100)
-    : new Intl.NumberFormat(LOCALE).format(minor / 100);
-}
+const money = (minor: number): string => priced(minor, currency, LOCALE);
 
 /** 540 is 09:00. */
 function clock(minutes: number): string {

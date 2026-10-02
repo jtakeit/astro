@@ -49,6 +49,7 @@
  * `copy.noScript`, and nothing pretends otherwise.
  */
 import { under } from '../lib/under';
+import { money } from '../lib/money';
 
 interface Named {
   slug: string;
@@ -223,7 +224,7 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
                 <span class="booking__service-name">{one.title}</span>
                 <span class="booking__service-meta">
                   {one.takes ? `${one.takes} min` : ''}
-                  {one.costs ? ` · ${new Intl.NumberFormat(locale === 'de' ? 'de-CH' : locale === 'uk' ? 'uk-UA' : 'en', { style: 'currency', currency }).format(one.costs / 100)}` : ''}
+                  {one.costs ? ` · ${money(one.costs, currency, locale === 'de' ? 'de-CH' : locale === 'uk' ? 'uk-UA' : 'en')}` : ''}
                 </span>
               </label>
             ))}
@@ -334,6 +335,8 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
 </form>
 
 <script>
+  import { money } from '../lib/money';
+
   /**
    * The whole client. No framework, one form, one fetch per question.
    *
@@ -380,10 +383,10 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
       if (chosenBoxes.length < 2) { total.hidden = true; return; }
       const minutes = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.takes ?? 0), 0);
       const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0), 0);
-      const money = minor > 0
-        ? ' · ' + new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: form.dataset.currency || 'CHF' }).format(minor / 100)
+      const price = minor > 0
+        ? ' · ' + money(minor, form.dataset.currency, document.documentElement.lang || 'en')
         : '';
-      total.textContent = `${words.total}: ${minutes} min${money}`;
+      total.textContent = `${words.total}: ${minutes} min${price}`;
       total.hidden = false;
     }
     const resource = form.querySelector<HTMLSelectElement>('[name=resource]');
@@ -642,7 +645,7 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
       const cls = classChosen() || (resourceChosen() ? classOf[resourceChosen()] ?? '' : '');
       const minor = prices[cls] ?? prices[''] ?? 0;
       if (!s || minor <= 0) { stayTotal.hidden = true; return; }
-      stayTotal.textContent = `${words.total}: ` + new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: currency.toUpperCase() }).format(minor / 100);
+      stayTotal.textContent = `${words.total}: ` + money(minor, currency, document.documentElement.lang || 'en');
       stayTotal.hidden = false;
     }
 
@@ -906,7 +909,7 @@ const SENDS = ['service', 'services', 'resource', 'class', 'party', 'count', 'st
         note.textContent = words.payNote;
         note.hidden = false;
         const pay = q<HTMLAnchorElement>('[data-pay]');
-        pay.textContent = `${words.pay} · ${new Intl.NumberFormat(document.documentElement.lang || 'en', { style: 'currency', currency: made.currency.toUpperCase() }).format(made.amount_minor / 100)}`;
+        pay.textContent = `${words.pay} · ${money(made.amount_minor, made.currency, document.documentElement.lang || 'en')}`;
         pay.href = '#';
         pay.hidden = false;
         pay.addEventListener('click', async (event) => {
