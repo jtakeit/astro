@@ -25,13 +25,15 @@ from `jtk/bookings.json`, pages for robots, sitemap and llms.txt, and
 `src/content/blocks.ts` — the declaration of what the owner may edit. Nothing in it
 decides how the site looks; every component is yours to replace.
 
-A business that takes bookings starts from its **kit**: read
-`jtakeit:///kits/<kind>.md` through the platform's MCP server, save the JSON under
-«The kit, whole» as a file, and pass it:
+A business that takes bookings starts from its **kit**, asked of the platform
+by its kind (`GET /v1/kits/<kind>`; the kinds are at `/v1/kits`):
 
 ```
-npx @jtakeit/astro create <slug> --locale uk --kit ./car_rental.json
+npx @jtakeit/astro create <slug> --locale uk --kit car_rental
 ```
+
+A file of the kit's JSON is taken too — `--kit ./car_rental.json` — and
+`--api` points at another platform than `https://api.jtakeit.com`.
 
 The kit's collections, rates and settings are laid out — `blocks.ts`,
 `jtk/bookings.json`, the rates as entries in the site's language — and the services'
@@ -39,7 +41,10 @@ listing is the booking page — the kit whole, nothing left out quietly. What it
 leaves to the brief (the time zone, the prices, the cars) is printed at the end,
 with where to read what it chose for the business — confirmation, cancellation,
 payment, hand-over hours — to be said back to the developer and confirmed
-(`jtakeit:///guides/the-brief.md`). Nothing in it is made up.
+(`jtakeit:///guides/the-brief.md`). Nothing in it is made up. The settings
+record which kit and which version they came from (`kit`, `kit_version`): when
+the kit is fixed later, the platform's judge says so to the site
+(`JTK_W_KIT_BEHIND`), with what changed.
 
 ## The catalogue
 

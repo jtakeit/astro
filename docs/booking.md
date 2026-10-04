@@ -12,8 +12,9 @@ in the platform's docs.
 
 ## Turning it on
 
-A site scaffolded with `--kit` has all of this already: the collections, the
-module pointed at them, the settings with `page` at the services' listing, and
+A site scaffolded with `--kit <kind>` has all of this already: the collections,
+the module pointed at them, the settings with `page` at the services' listing
+and `kit`/`kit_version` saying which kit they came from, and
 that listing — `src/pages/[...listing].astro` — as the booking page, the rates
 above the form. What follows is what a kit is made of, and how to do it by hand.
 

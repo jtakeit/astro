@@ -1,6 +1,6 @@
 // The scaffold writes a project with every token filled and nothing of the
 // studio's left in it; the catalogue tool emits a file from it.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -102,11 +102,50 @@ try {
   const emitted = JSON.parse(readFileSync(join(rental, 'jtk/catalogue.json'), 'utf8'));
   if (emitted.modules?.bookings?.resources !== 'cars' || !emitted.blocks.some((b) => b.type === 'tariff')) fail('the kit did not reach the catalogue');
 
-  // A kit is a file; a kind alone is told where the file is.
+  if (diary.kit !== 'car_rental' || 'kit_version' in diary) fail('a kit from a file is named, and has no version to record');
+
+  // A kit by its kind, asked of the platform: a stand-in answers on a port of
+  // its own, in a process of its own, as /v1/kits does — the kit whole and
+  // its version, which the settings record for the judge (JTK_W_KIT_BEHIND).
+  const served = JSON.parse(readFileSync(kitFile, 'utf8'));
+  const platform = spawn('node', ['-e', `
+    const http = require('node:http');
+    const kit = ${JSON.stringify(served)};
+    http.createServer((q, a) => {
+      a.setHeader('content-type', 'application/json');
+      if (q.url === '/v1/kits/car_rental') return a.end(JSON.stringify({ kind: 'car_rental', version: 'abc123def456', kit }));
+      if (q.url === '/v1/kits') return a.end(JSON.stringify({ kits: [{ kind: 'car_rental', about: '', version: 'abc123def456' }] }));
+      a.statusCode = 404; a.end('{}');
+    }).listen(0, '127.0.0.1', function () { console.log(this.address().port); });
+  `]);
+  const port = await new Promise((done, failed) => {
+    platform.stdout.once('data', (line) => done(String(line).trim()));
+    platform.once('error', failed);
+  });
+  try {
+    const asked = join(dir, 'asked');
+    execFileSync('node', [bin, 'create', 'smoke-asked', '--locale', 'uk', '--kit', 'car_rental', '--api', `http://127.0.0.1:${port}`, '--out', asked, '--no-git'], { stdio: 'pipe' });
+    const settings = JSON.parse(readFileSync(join(asked, 'jtk/bookings.json'), 'utf8')).blocks[0];
+    if (settings.kit !== 'car_rental' || settings.kit_version !== 'abc123def456') fail('a kit asked by its kind did not record which kit and which version');
+    if (JSON.parse(readFileSync(join(asked, 'jtk/content/rates/day.json'), 'utf8')).blocks[0].title !== 'Доба') fail('a kit asked by its kind did not lay its rates out');
+    const byKind = join(dir, 'by-kind');
+    execFileSync('node', [bin, 'create', 'smoke-kind', '--kind', 'car_rental', '--api', `http://127.0.0.1:${port}`, '--out', byKind, '--no-git'], { stdio: 'pipe' });
+    if (JSON.parse(readFileSync(join(byKind, 'jtk/bookings.json'), 'utf8')).blocks[0].kit !== 'car_rental') fail('--kind is not --kit');
+
+    let said = '';
+    try {
+      execFileSync('node', [bin, 'create', 'smoke-none', '--kit', 'hovercraft_hire', '--api', `http://127.0.0.1:${port}`, '--out', join(dir, 'none'), '--no-git'], { stdio: 'pipe' });
+    } catch (why) {
+      said = String(why.stderr);
+    }
+    if (!said.includes('no kit of that kind') || !said.includes('car_rental')) fail(`a kind the platform has no kit of was not refused with the kinds: ${said}`);
+  } finally {
+    platform.kill();
+  }
+
   const refused = (args) => {
     try { execFileSync('node', [bin, 'create', 'smoke-no', ...args, '--out', join(dir, 'no'), '--no-git'], { stdio: 'pipe' }); return false; } catch { return true; }
   };
-  if (!refused(['--kind', 'car_rental'])) fail('--kind without --kit was not refused');
   writeFileSync(join(dir, 'bad.json'), '{"kind": "car_rental"}');
   if (!refused(['--kit', join(dir, 'bad.json')])) fail('a file that is not a kit was laid out');
 
