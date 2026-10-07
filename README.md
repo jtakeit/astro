@@ -10,7 +10,13 @@ domain. What the platform holds a repository to is small — a `jtk/catalogue.js
 that validates, a `data-jtk-path` on every editable field, a `dist/` from an Astro
 build — and this package is that contract with a page already on it.
 
-Astro is the only generator the platform builds today.
+This is the one scaffold the platform ships, and it is Astro's. The platform
+builds whatever writes a `dist/` that keeps the contract; on another generator
+the site is laid out by hand — [connecting a site](https://jtakeit.com/docs/guides/connecting-a-site),
+*On another generator* — and takes the pieces worth not writing twice from
+[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit), which this scaffold uses itself: the booking
+form and the enquiry form as markup and as elements, `_meta.json` and the
+specimen rule, a kit laid out, and the catalogue tool.
 
 ## Scaffold
 
@@ -24,6 +30,27 @@ You get a static Astro project: a layout, a hero, a lead form posting to `/api/l
 from `jtk/bookings.json`, pages for robots, sitemap and llms.txt, and
 `src/content/blocks.ts` — the declaration of what the owner may edit. Nothing in it
 decides how the site looks; every component is yours to replace.
+
+A business that takes bookings starts from its **kit**, asked of the platform
+by its kind (`GET /v1/kits/<kind>`; the kinds are at `/v1/kits`):
+
+```
+npx @jtakeit/astro create <slug> --locale uk --kit car_rental
+```
+
+A file of the kit's JSON is taken too — `--kit ./car_rental.json` — and
+`--api` points at another platform than `https://api.jtakeit.com`.
+
+The kit's collections, rates and settings are laid out — `blocks.ts`,
+`jtk/bookings.json`, the rates as entries in the site's language — and the services'
+listing is the booking page — the kit whole, nothing left out quietly. What it
+leaves to the brief (the time zone, the prices, the cars) is printed at the end,
+with where to read what it chose for the business — confirmation, cancellation,
+payment, hand-over hours — to be said back to the developer and confirmed
+(`jtakeit:///guides/the-brief.md`). Nothing in it is made up. The settings
+record which kit and which version they came from (`kit`, `kit_version`): when
+the kit is fixed later, the platform's judge says so to the site
+(`JTK_W_KIT_BEHIND`), with what changed.
 
 ## The catalogue
 
@@ -40,9 +67,12 @@ and this tool sits its exam.
 
 ## Then, on the platform
 
-1. Push the repository somewhere the platform's GitHub App can reach.
-2. `create_site`, then `attach_repo`.
-3. `trigger_build`; `import_branch` after committing content; `publish`.
+1. Push the repository somewhere the platform's GitHub App can reach, and run
+   `validate_catalogue` by site and ref once the site exists.
+2. `create_site`, then `attach_repo` — it imports the branch.
+3. `commit_and_build` — the first build; `get_build` until it settles. Later:
+   commit, `import_branch`, `commit_and_build`. `trigger_build` rebuilds a site
+   that has been built once, and refuses one that has not.
 4. `get_preview_link` to look; the studio hands the owner's link to the client from
    the panel.
 

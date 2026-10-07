@@ -92,11 +92,22 @@ const paperLuma = DESIGN.paper ? luminance(DESIGN.paper) : null;
 const inkLuma = DESIGN.ink ? luminance(DESIGN.ink) : null;
 const invertedPage = paperLuma !== null && inkLuma !== null && paperLuma < inkLuma;
 
+/*
+ * Only the three the document decides, and which way «lifted» is.
+ *
+ * `--panel` and `--accent-ink` were set here to the paper and the accent
+ * themselves, and an inline style on <html> beats `:root` — so the lifted
+ * surface and the darker text form global.css derives were flattened back, and
+ * the accent carried words at 3.4:1 (an agent's rehearsal, 30 September 2026).
+ * They are derived in global.css from these three, which is also what lets the
+ * studio bar's live accent move all of them at once. What CSS cannot tell is
+ * whether the page is light or dark, so `--lift` says which way a panel rises:
+ * towards white on a light page, towards the ink on a dark one.
+ */
 if (DESIGN.paper) palette['--paper'] = DESIGN.paper;
-if (DESIGN.paper) palette['--panel'] = DESIGN.paper;
+if (DESIGN.paper) palette['--lift'] = invertedPage ? 'var(--ink)' : '#ffffff';
 if (DESIGN.ink) palette['--ink'] = DESIGN.ink;
 if (DESIGN.accent) palette['--accent'] = DESIGN.accent;
-if (DESIGN.accent) palette['--accent-ink'] = DESIGN.accent;
 if (DESIGN.ground) palette['--fl-ground'] = DESIGN.ground;
 (DESIGN.colors ?? []).forEach((colour: string, i: number) => {
   if (colour) palette[`--fl-c${i + 1}`] = colour;

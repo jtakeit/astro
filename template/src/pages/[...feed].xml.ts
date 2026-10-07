@@ -15,7 +15,8 @@ import { allListed, href } from '../lib/entries';
  * to a reader is a preview competing with the site it previews.
  */
 export async function getStaticPaths() {
-  return COLLECTIONS.map((collection) => ({
+  // A collection without pages has no feed: its entries have no address.
+  return COLLECTIONS.filter((collection) => collection.pages !== false).map((collection) => ({
     params: { feed: `${collection.prefix.replace(/^\//, '')}/rss` },
     props: { name: collection.name },
   }));

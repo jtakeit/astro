@@ -20,8 +20,13 @@ switch (command) {
   }
   case 'catalogue':
   case 'catalog': {
-    process.argv = [process.argv[0], process.argv[1], ...rest];
-    await import(pathToFileURL(join(HERE, '..', 'lib', 'catalogue.mjs')).href);
+    // The tool is the kit's (@jtakeit/kit/catalogue); it signs the file as
+    // this package, which is what wrote the declaration it reads.
+    const { readFileSync } = await import('node:fs');
+    const version = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8')).version;
+    const args = rest.includes('--generator') ? rest : [...rest, '--generator', `@jtakeit/astro@${version}`];
+    process.argv = [process.argv[0], process.argv[1], ...args];
+    await import('@jtakeit/kit/catalogue');
     break;
   }
   default: {

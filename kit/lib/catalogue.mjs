@@ -64,7 +64,6 @@ const flag = (name, fallback) => {
 };
 
 const root = resolve(flag('root', process.cwd()));
-const declaration = join(root, 'src', 'catalogue-declaration');
 
 function die(message) {
   console.error(`jtk catalogue: ${message}`);
@@ -77,20 +76,31 @@ function die(message) {
 // which is why the declaration may hold interfaces and `satisfies` and still be
 // readable here with no build step and no dependency — and why it is a module
 // rather than a JSON file a person edits with no type checking at all.
+//
+// `src/content/blocks.ts` is where the scaffold keeps it; a site on another
+// generator says where its own is with `--declaration`. What the module
+// exports is the contract — BLOCKS, PAGE_SEO, BUSINESS_FACTS, COLLECTIONS,
+// MODULES, LOCALES — not where it lives.
 
-const source = join(root, 'src', 'content', 'blocks.ts');
+const declarationPath = flag('declaration', join('src', 'content', 'blocks.ts'));
+const source = resolve(root, declarationPath);
 if (!existsSync(source)) {
-  die(`no src/content/blocks.ts — that file is what says which fields the admin may edit.
-     A site without one cannot be attached to the admin; copy the scaffold's and cut it down.`);
+  die(`no ${declarationPath} — that file is what says which fields the admin may edit.
+     A site without one cannot be attached to the admin; copy the scaffold's and cut it down,
+     or say where yours is: --declaration <file>.`);
 }
 
 let declared;
 try {
   declared = await import(pathToFileURL(source).href);
 } catch (why) {
-  die(`could not read src/content/blocks.ts: ${why.message}
+  die(`could not read ${declarationPath}: ${why.message}
      Node runs TypeScript by stripping types, so the file may hold no enums and no namespaces.`);
 }
+
+// Who wrote the file, for the record: this package, unless the scaffold
+// that owns the declaration says it did (`@jtakeit/astro` passes --generator).
+const GENERATOR = flag('generator', `@jtakeit/kit@${TOOL_VERSION}`);
 
 const catalogue = {
   /*
@@ -108,7 +118,7 @@ const catalogue = {
    * dependencies for exactly the same reason.
    */
   contract: 2,
-  generator: `@jtakeit/astro@${TOOL_VERSION}`,
+  generator: GENERATOR,
   blocks: declared.BLOCKS ?? [],
   page_seo: declared.PAGE_SEO ?? [],
   business_facts: declared.BUSINESS_FACTS ?? [],
@@ -680,7 +690,9 @@ function sourceFiles(dir) {
       found.push(...sourceFiles(full));
       continue;
     }
-    if (/\.(astro|ts|tsx|css)$/.test(entry.name)) found.push(full);
+    // Whatever a generator writes a page in: the check is for an address a
+    // person typed, and those are typed in any of these.
+    if (/\.(astro|ts|tsx|js|jsx|mjs|vue|svelte|html|njk|liquid|hbs|css)$/.test(entry.name)) found.push(full);
   }
   return found;
 }
@@ -722,20 +734,22 @@ for (const file of sourceFiles(join(root, 'src'))) {
  * Both are gaps and both are ours to close.
  */
 
-/** The session, presented the way the admin API insists on finding it. */
+/** The credential, presented the way the admin API reads it. */
 function judgeRequest(text) {
   const api = (process.env.JTK_API ?? '').trim().replace(/\/+$/, '');
+  const token = (process.env.JTK_TOKEN ?? '').trim();
   return {
     url: `${api}/v1/registry/validate`,
     init: {
       method: 'POST',
       headers: {
-        // A cookie named `sid`, because that is the only credential the service
-        // takes: auth/authHandler.go reads one `http.Cookie` and says in as many
-        // words that there are no bearer tokens in the app. An Authorization
-        // header would be ignored in silence and every call would come back
-        // unauthenticated, which is the most confusing way to be wrong.
-        cookie: `sid=${(process.env.JTK_TOKEN ?? '').trim()}`,
+        // Two credentials, and the API reads each in its own place
+        // (auth/authHandler.go): an agent's `jtk_…` token as a bearer, a
+        // person's signed-in session as the `sid` cookie. This said once that
+        // there were no bearer tokens in the app, which stopped being true
+        // when agents got theirs (wiki/40); a `jtk_…` token sent as a cookie
+        // is not read at all.
+        ...(token.startsWith('jtk_') ? { authorization: `Bearer ${token}` } : { cookie: `sid=${token}` }),
         accept: 'application/json',
         'content-type': 'application/json',
       },
@@ -761,11 +775,12 @@ async function sitTheExam(text, ours) {
 jtk catalogue: --judge needs somewhere to ask and something to ask with.
 
   export JTK_API=https://…        the admin API (http://localhost:4000 locally)
-  export JTK_TOKEN=…              a session minted in the admin for a studio member
+  export JTK_TOKEN=…              an agent's jtk_… token, or a signed-in session
 
-The token is the value of the \`sid\` cookie on a signed-in admin session; the
-same two variables the toolkit's MCP server reads. \`fl-doctor\` says whether
-this machine has them.
+An agent's access token (\`jtk_…\`, from connecting it to the MCP server) is sent
+as a bearer; anything else is taken for the \`sid\` cookie of a person signed in
+to the admin. The MCP server itself reads neither variable — it is hosted, and
+an agent connects to it through the browser.
 
 An agent with the MCP server needs neither: push, then \`validate_catalogue\`
 with the site and the ref judges the whole commit — this catalogue, the
@@ -790,7 +805,9 @@ settings, the content — with the same judge and every finding at once.`);
     console.error(`  ${said || '(nothing)'}`);
     console.error(
       response.status === 401 || response.status === 403
-        ? 'A session expires. Sign in to the admin again and re-read the `sid` cookie into JTK_TOKEN.'
+        ? (process.env.JTK_TOKEN ?? '').trim().startsWith('jtk_')
+          ? "An agent's access token lasts an hour; its client renews it. Put a current one in JTK_TOKEN — or push and ask validate_catalogue over MCP, which needs none."
+          : 'A session expires. Sign in to the admin again and re-read the `sid` cookie into JTK_TOKEN.'
         : 'The catalogue was not examined. This is not a verdict on it.',
     );
     return 0;
@@ -1304,7 +1321,12 @@ for (const page of pages) {
        * where one is not. This used to `continue` here and let the platform
        * say it a build later; it is said here now, the same way.
        */
-      const everywhere = new Set([...annotationsByPage.values()].flat());
+      // Every page's annotations, as one set of strings. Each page's are a Set,
+      // and `.flat()` does not open a Set: this held Sets, `has` of a string
+      // was false for every field, and every entry of every `pages: false`
+      // collection was reported as annotated nowhere (reported by an agent's
+      // rehearsal, 30 September 2026 — thirteen false findings on a restaurant).
+      const everywhere = new Set([...annotationsByPage.values()].flatMap((found) => [...found]));
       (page.blocks ?? []).forEach((block, at) => {
         const type = byType.get(block.type);
         if (!type) return;
@@ -1545,8 +1567,11 @@ for (const [at, found] of annotationsByPage) {
    */
   if (at.split('/').some((part) => part.startsWith('_fl-'))) continue;
   // A shared field is correct here: it says which document it belongs to, and
-  // it is not this one.
-  const ownPage = [...found].filter((path) => !path.startsWith('shared:'));
+  // it is not this one. So is `page:<address>:…` — an entry with no page of its
+  // own, annotated on its listing, which is exactly what the check on
+  // `pages: false` collections above asks for; reporting it here as well told
+  // the same site to do a thing and not to (30 September 2026).
+  const ownPage = [...found].filter((path) => !path.startsWith('shared:') && !path.startsWith('page:'));
   if (ownPage.length === 0) continue;
   disagreements.push(`${at}: has annotations and no content document — ${ownPage.sort()[0]} would open the wrong page`);
 }
@@ -1565,7 +1590,14 @@ for (const [at, found] of annotationsByPage) {
  * the only proof that does not depend on how the site is written: whatever the
  * link went through, this is what came out. About five seconds on a whole site.
  */
-if (!flag('dist')) {
+// Astro's build takes `--outDir`, which is what lets this run into a directory
+// that is thrown away. Another generator is asked with `--dist`: build it once
+// yourself with a path in SITE_URL and point this at the result — which is the
+// same proof, made by hand.
+if (!flag('dist') && !existsSync(join(root, 'astro.config.mjs'))) {
+  console.log('not an Astro project: the second build under a path is skipped — build with SITE_URL=https://x.invalid/p/check/ and run again with --dist <dir> to prove the addresses');
+}
+if (!flag('dist') && existsSync(join(root, 'astro.config.mjs'))) {
   const prefix = '/p/fl-check/';
   const out = join(root, '.fl-prefix-check');
 

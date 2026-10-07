@@ -1,0 +1,107 @@
+// The booking form, as the kit renders it and as its element reads it.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { renderBookingForm, SENDS } from '../lib/booking/render.mjs';
+import { wordsFor, LOCALES } from '../lib/booking/words.mjs';
+import { money } from '../lib/money.mjs';
+import { daysBetween, plusDays, lasting, wireBooking, wireAll, defineBooking, JtkBooking } from '../elements/booking.js';
+
+const services = [
+  { slug: 'cut', title: 'Haircut', takes: 45, costs: 5500, group: 'Hair' },
+  { slug: 'colour', title: 'Colour <b>&amp;</b> tone', takes: 90, costs: 12000, group: 'Hair' },
+  { slug: 'nails', title: 'Manicure', takes: 60, costs: 4000 },
+];
+const now = new Date('2026-10-07T10:00:00Z');
+
+test('the form says what it sends, and is what preflight reads', () => {
+  const html = renderBookingForm({ services, locale: 'uk', api: '/p/salon/api/', now });
+  assert.match(html, /^<jtk-booking><form class="booking" data-booking /);
+  assert.ok(html.includes(`data-sends="${SENDS.join(',')}"`));
+  assert.ok(html.includes('data-api="/p/salon/api/"'));
+  assert.ok(html.includes('data-jtk-fixed'));
+  assert.ok(html.includes('novalidate'));
+  // The platform's list, exactly: a key missing here is never sent, one
+  // added is dropped by the element and said.
+  assert.deepEqual([...SENDS], ['service', 'services', 'resource', 'class', 'party', 'count', 'start', 'name', 'phone', 'email', 'note', 'turnstile']);
+});
+
+test('one choice by default, a checklist with the running total when combined', () => {
+  const one = renderBookingForm({ services, locale: 'en', now });
+  assert.ok(one.includes('<select class="field__input" id="booking-service" name="service" required>'));
+  assert.ok(one.includes('<option value="cut">Haircut</option>'));
+  assert.ok(!one.includes('type="checkbox"'));
+
+  const many = renderBookingForm({ services, locale: 'en', combine: true, currency: 'CHF', now });
+  assert.ok(many.includes('<fieldset class="booking__services" data-services>'));
+  assert.ok(many.includes('<input type="checkbox" name="service" value="cut" data-takes="45" data-costs="5500">'));
+  assert.ok(many.includes('<p class="booking__run-title">Hair</p>'));
+  assert.equal(many.match(/booking__run-title/g).length, 1, 'a heading once, for a run of services');
+  assert.ok(many.includes('[data-total]') || many.includes('data-total'));
+});
+
+test('titles are escaped, whatever an owner typed into one', () => {
+  const html = renderBookingForm({ services, locale: 'en', now });
+  assert.ok(html.includes('Colour &lt;b&gt;&amp;amp;&lt;/b&gt; tone'));
+  assert.ok(!html.includes('<b>'));
+});
+
+test('the words are the locale\'s, the letting business\'s by the day, and the platform\'s to replace', () => {
+  const uk = renderBookingForm({ services, locale: 'uk', now });
+  assert.ok(uk.includes('data-say="book">Записатися</button>'));
+  assert.ok(uk.includes('>Оберіть день<'));
+  const daily = renderBookingForm({ services, locale: 'uk', scale: 'daily', now });
+  assert.ok(daily.includes('>Оберіть дати<'));
+  assert.ok(daily.includes('data-scale="daily"'));
+  // The words travel on the form for the element to read, as JSON in an attribute.
+  const said = /data-words="([^"]*)"/.exec(daily)[1].replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&amp;', '&');
+  assert.equal(JSON.parse(said).pick, 'Оберіть дати');
+  // An unknown language reads as English rather than a crash.
+  assert.ok(renderBookingForm({ services, locale: 'fr', now }).includes('>Book</button>'));
+  assert.deepEqual([...LOCALES], ['uk', 'de', 'en']);
+  assert.equal(wordsFor('de').book, 'Termin buchen');
+  assert.equal(wordsFor('de', 'daily').time, 'Tage');
+});
+
+test('a kind that is not a salon holds its words back until the platform has said them', () => {
+  assert.ok(renderBookingForm({ services, locale: 'en', kind: 'car_rental', now }).includes('class="booking booking--unsaid"'));
+  assert.ok(renderBookingForm({ services, locale: 'en', kind: 'salon', now }).includes('class="booking" data-booking'));
+  assert.ok(renderBookingForm({ services, locale: 'en', now }).includes('class="booking" data-booking'));
+});
+
+test('the choice of whom is offered only where there is one to make', () => {
+  const solo = renderBookingForm({ services, locale: 'en', resources: [{ slug: 'a', title: 'Anna' }], now });
+  assert.ok(!solo.includes('name="resource"'));
+  const team = renderBookingForm({ services, locale: 'en', resources: [{ slug: 'a', title: 'Anna' }, { slug: 'b', title: 'Bo' }], now });
+  assert.ok(team.includes('<select class="field__input" id="booking-resource" name="resource" data-say-wait>'));
+  assert.ok(team.includes('<option value="" data-say="any">Anyone</option>'));
+});
+
+test('the picker starts on the build\'s day and reaches the horizon; the wrapper may be left off', () => {
+  const html = renderBookingForm({ services, locale: 'en', daysAhead: 10, now });
+  assert.ok(html.includes('id="booking-day" name="day" type="date" min="2026-10-07" max="2026-10-17" required'));
+  const bare = renderBookingForm({ services, locale: 'en', tag: '', now });
+  assert.ok(bare.startsWith('<form class="booking"'));
+  assert.ok(!bare.includes('jtk-booking'));
+  assert.throws(() => renderBookingForm({ locale: 'en' }), TypeError);
+});
+
+test('the element\'s arithmetic: days by the calendar, hours as the time they are', () => {
+  assert.equal(daysBetween('2026-10-10', '2026-10-13'), 3);
+  assert.equal(daysBetween('2026-10-24', '2026-10-26'), 2, 'the night the clocks move is still one night');
+  assert.equal(plusDays('2026-10-30', 3), '2026-11-02');
+  assert.equal(lasting(90, wordsFor('uk')), '1 год 30 хв');
+  assert.equal(lasting(120, wordsFor('en')), '2 h');
+  // «2 300 ₴», whichever space the locale's data puts in the thousands.
+  assert.equal(money(230000, 'UAH', 'uk').replace(/[  ]/g, ' '), '2 300 ₴');
+  assert.equal(money(5500, undefined, 'en'), '55');
+  assert.equal(money(5550, undefined, 'en'), '55.50', 'kopecks shown whole once there are any');
+});
+
+test('the module loads where there is no document, and exports the element for one', () => {
+  assert.equal(typeof wireBooking, 'function');
+  assert.equal(typeof wireAll, 'function');
+  assert.equal(typeof defineBooking, 'function');
+  assert.equal(typeof JtkBooking, 'function');
+  // Nothing to define under Node: it returns rather than throws.
+  assert.doesNotThrow(() => defineBooking());
+});

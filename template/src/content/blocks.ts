@@ -628,6 +628,16 @@ export interface Collection {
   name: string;
   /** What the owner sees in the admin's sidebar. Their language. */
   label: Text;
+  /**
+   * What one entry is called — «авто», «майстер» — on the admin's button and
+   * over its form. Left out, the admin says "entry", or the module's own word
+   * for a collection a module is pointed at.
+   */
+  one?: Text;
+  /** The sentence under the collection's title in the admin. */
+  intro?: Text;
+  /** A `select` field of `type` the entries are grouped by — a menu's courses. */
+  group?: string;
   /** Where entries live: `/blog` gives `/blog/aftercare`. No trailing slash. */
   prefix: string;
   /** The block type an entry's document opens with. */

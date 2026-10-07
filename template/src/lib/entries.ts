@@ -88,10 +88,17 @@ export async function listed(name: string): Promise<Entry[]> {
   return collection.order?.desc === true ? out.reverse() : out;
 }
 
-/** Every entry of every collection, listable. Feeds the sitemap and llms.txt. */
+/**
+ * Every entry with a page of its own, listable. Feeds the sitemap, the feeds
+ * and llms.txt — which list addresses, and an entry of a collection without
+ * pages (a rate, a table) has none: it is a row of its collection's listing.
+ */
 export async function allListed(): Promise<{ collection: Collection; entries: Entry[] }[]> {
   return Promise.all(
-    COLLECTIONS.map(async (collection) => ({ collection, entries: await listed(collection.name) })),
+    COLLECTIONS.filter((collection) => collection.pages !== false).map(async (collection) => ({
+      collection,
+      entries: await listed(collection.name),
+    })),
   );
 }
 

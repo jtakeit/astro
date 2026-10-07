@@ -5,12 +5,26 @@ own host answer everything a visitor needs, and nothing about availability is
 computed in the repository — which is what lets the owner change their hours
 in the admin and have the site offer them the next minute, with no rebuild.
 
-Template: `src/components/BookingForm.astro`. Copy it,
-keep the script, restyle the markup. The contract in full is
+Template: `src/components/BookingForm.astro` — a wrapper over
+[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit): the markup from `renderBookingForm`, the
+behaviour from the `<jtk-booking>` element, the legible-and-nothing-more styles
+from `@jtakeit/kit/booking.css`. Restyle the markup; the behaviour is the
+platform's protocol and is the kit's to keep, not the site's to rewrite. The
+contract in full is
 [bookings-on-the-site](https://jtakeit.com/docs/guides/bookings-on-the-site)
 in the platform's docs.
 
+A site on another generator takes the same two pieces without Astro:
+`renderBookingForm(...)` at build time, where the booking page is made, and
+`import '@jtakeit/kit/elements/booking'` once on the page.
+
 ## Turning it on
+
+A site scaffolded with `--kit <kind>` has all of this already: the collections,
+the module pointed at them, the settings with `page` at the services' listing
+and `kit`/`kit_version` saying which kit they came from, and
+that listing — `src/pages/[...listing].astro` — as the booking page, the rates
+above the form. What follows is what a kit is made of, and how to do it by hand.
 
 The site's catalogue declares the module and binds two collections:
 
@@ -27,8 +41,8 @@ Both are ordinary collections the owner edits in the admin — the team page and
 the diary's masters are the **same entries**. A service entry carries `takes`
 as a `duration` field; a master entry may carry its own weekly `hours`. The
 business's hours, days off and confirmation mode are the module's settings
-document, which the owner edits under the diary; the repository never holds
-them.
+document, which the owner edits under the diary; publish writes it to
+`jtk/bookings.json`, and a first commit may seed it there (below).
 
 ## The page
 
@@ -43,6 +57,8 @@ const services = (await listed('services')).map((e) => ({
 }));
 const masters  = (await listed('masters')).map((e) => ({ slug: e.id, title: String(e.data.title) }));
 const combine  = bookings.blocks[0].combine === true;                  // jtk/bookings.json, the owner's setting
+const scale    = bookings.blocks[0].scale ?? '';                      // 'daily' for a business that lets things by the day
+const kind     = bookings.blocks[0].kind ?? '';                       // 'car_rental', 'clinic'… — whose words the form speaks
 ```
 
 An entry is `{ id, data }` — the slug and the block's fields — which is what
@@ -56,8 +72,17 @@ booking*. Empty means the front page.
 
 ```ts
 ---
-<BookingForm services={services} resources={masters} locale="de" combine={combine} currency="CHF" />
+<BookingForm services={services} resources={masters} locale="de" combine={combine} scale={scale} kind={kind} currency="CHF" />
 ```
+
+The words that depend on the kind of business — «Записатися» or «Орендувати»,
+«Майстер» or «Авто», «Ви записані» or «Оренду підтверджено» — are the
+platform's: its availability answer carries them as `words`, in every
+language, from the kind's dictionary with the site's own `words` over them.
+The form asks for them as soon as it loads, and uses them from every answer.
+Its own are a salon's, which is what a site with no `kind` is; so with `kind`
+set to anything else those few words are held back until the platform has
+said them, and shown in the salon's only if it does not answer at all.
 
 With `combine` on — the module's setting, the owner's to flip — the services
 are a checklist under their `group` headings with a running total of minutes
@@ -65,6 +90,23 @@ and money, and the visit is booked as one: the same person, the sum of the
 lengths, the sum of the prices. Off, the form is one choice, as it always was.
 Only services with a `takes` belong on the form; a price-list row without one
 is refused by the platform, so filter before passing.
+
+With `scale` set to `'daily'` — a business that lets cars, flats or desks by
+the day — the form speaks in days: the offered starts read «сб, 26 вер. — нд,
+27 вер.», the confirmation «субота, 26 вересня — неділя, 27 вересня», and none
+of the salon's hours. Every letting starts at midnight, so the hourly words
+said «00:00» everywhere, which a visitor reads as a broken site. The platform's
+answer carries the scale too and wins while the page runs; the prop decides
+the words drawn before it answers.
+
+By the day the visitor gives two dates, «від» and «до», and the form books
+that many nights: it sends `count` — how many of the service — and never an
+end, because the platform computes the end and the price from the service. How
+many may be taken is the service's, in `jtk/content`: `fewest` and `most`,
+one to thirty when unsaid. A service taken a fixed number of times — a week
+as `takes` 10080 with `fewest` and `most` both 1 — asks for the first date
+only. The platform's first answer says all of this per service, so a tariff
+changed in the panel needs no rebuild.
 
 Pass `resources` only when the visitor should choose; leave it out for a solo
 business and the platform assigns. The words are the component's, per locale;

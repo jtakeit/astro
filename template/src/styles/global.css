@@ -32,7 +32,9 @@
 
 :root {
   --paper: #ffffff;
-  --panel: #ffffff;
+  /* Derived: see the note on tokens above and Layout.astro's `--lift`. */
+  --lift: #ffffff;
+  --panel: color-mix(in srgb, var(--paper) 88%, var(--lift));
   --paper-deep: #f4f2ee;
 
   --ink: #16130f;
@@ -40,7 +42,8 @@
   --line: #e2ded7;
 
   --accent: #2f5bff;
-  --accent-ink: #1c3fd6;
+  /* The accent as text: a step towards the ink, following a live accent. */
+  --accent-ink: color-mix(in srgb, var(--accent) 70%, var(--ink));
   --danger: #b3261e;
 
   /*
@@ -127,6 +130,20 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/*
+ * `hidden` means hidden, whatever the element's class says.
+ *
+ * The browser's own `[hidden] { display: none }` loses to any class that sets
+ * `display` — and every script here shows and hides by the attribute: the
+ * booking form's fields, its «you are booked» panel, the lead form's answer. A
+ * design pass that gave `.field` a grid put an empty «ви записані» panel on
+ * the page before anybody had booked (an agent's rehearsal, 30 September
+ * 2026). Important, because it is the one rule that must win.
+ */
+[hidden] {
+  display: none !important;
 }
 
 /*

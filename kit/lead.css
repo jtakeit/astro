@@ -1,0 +1,23 @@
+/*
+ * The enquiry form, legible and nothing more — a reference, not a design.
+ * `field`, `field__input`, `btn` are names for the site to restyle with its
+ * own. Keep `.trap` and the `[hidden]` rule whatever you do to the rest.
+ */
+.lead { display: grid; gap: 1.25rem; max-inline-size: 34rem; }
+.lead .field { display: grid; gap: 0.375rem; }
+.lead .field__label { font-size: 0.875rem; }
+.lead .field__input {
+  inline-size: 100%; padding: 0.75rem 0.875rem; font: inherit; color: inherit;
+  background: var(--paper-deep, #f2efea); border: 1px solid var(--line, #d9d4cc); border-radius: var(--r-2, 8px);
+}
+.lead .field__input--area { resize: vertical; }
+.lead .field__error { margin: 0; font-size: 0.8125rem; color: var(--danger, #b3261e); }
+
+/* Bots fill everything; people never see this. Off-screen rather than
+   display:none, which some bots detect. */
+.lead .trap { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.lead__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.lead__status { margin: 0; font-size: 0.875rem; }
+.lead[data-state='error'] .lead__status { color: var(--danger, #b3261e); }
+.lead [hidden] { display: none !important; }

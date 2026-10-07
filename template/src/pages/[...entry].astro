@@ -31,14 +31,19 @@
 import { everyEntry, rendered } from '../lib/entries';
 import { Image } from 'astro:assets';
 import Layout from '../layouts/Layout.astro';
-import { COLLECTIONS } from '../content/blocks';
+import { BLOCKS, COLLECTIONS, LOCALE, MODULES, words, type Field } from '../content/blocks';
 import { isUpload, uploaded } from '../lib/uploads';
 import { photo } from '../lib/photos';
+import { money as priced } from '../lib/money';
 
 export async function getStaticPaths() {
   const paths = [];
 
   for (const collection of COLLECTIONS) {
+    // A collection without pages — a price list, the tables of a restaurant —
+    // has none: its entries are rows of its listing (`[...listing].astro`),
+    // and the platform expects no route for them.
+    if (collection.pages === false) continue;
     const entries = await everyEntry(collection.name);
     for (const entry of entries) {
       paths.push({
@@ -50,7 +55,17 @@ export async function getStaticPaths() {
   return paths;
 }
 
-const { entry } = Astro.props;
+const { entry, collection } = Astro.props;
+
+/*
+ * Whether this entry's type has a body at all. A post has; a car, a doctor, an
+ * apartment has not — its page is its fields — and a body drawn for one was an
+ * editable place the catalogue does not declare: the admin would open an
+ * editor on nothing, and `jtk catalogue` said so for every car of a rental
+ * (30 September 2026).
+ */
+const hasBody = (BLOCKS.find((one) => one.type === collection.type)?.fields ?? [])
+  .some((field) => field.key === 'body');
 const data = entry.data as Record<string, unknown>;
 const { Content } = await rendered(entry);
 
@@ -79,6 +94,148 @@ const excerpt = typeof data.excerpt === 'string' ? data.excerpt : '';
 const cover = typeof data.cover === 'string' && data.cover !== ''
   ? (isUpload(data.cover) ? uploaded(data.cover) : photo(data.cover))
   : undefined;
+
+/*
+ * ── every field the catalogue declares, not three ───────────────────────────
+ *
+ * The heading, the cover and the body are drawn by hand above; everything else
+ * the entry's type declares is drawn here, in the catalogue's order. A room
+ * type's price, an apartment's guests, a master's hours: an entry's page is
+ * its fields, and a field the owner fills in that no page shows is a field
+ * the guest never reads. A hotel's room type with a price refused every build
+ * (JTK_E_UNANNOTATED_FIELD …: blocks[0].costs, the night run of 2 October
+ * 2026), and the fields the check does not look for — a number, a list — were
+ * dropped from the page without a word.
+ *
+ * A field the owner edits by tapping it carries its `data-jtk-path`, by the
+ * same rule `annotation-lint.mjs` checks; the rest are edited in the panel
+ * beside the page and are drawn plain.
+ */
+const DRAWN = new Set(['title', 'cover', 'body']);
+const TAPPABLE = new Set(['text', 'textarea', 'richtext_lite', 'markdown', 'media', 'money', 'duration']);
+const tappable = (field: Field) =>
+  TAPPABLE.has(field.kind) && field.client_editable !== false && field.no_tap_target !== true;
+
+const siteFiles = import.meta.glob<{ business?: { currency?: string } }>('/jtk/site.json', { eager: true, import: 'default' });
+const currency = Object.values(siteFiles)[0]?.business?.currency ?? '';
+
+/** A length as the trade says it: whole days, whole hours, or minutes. */
+function length(minutes: number): string {
+  const [unit, n] = minutes % 1440 === 0 ? ['day', minutes / 1440] : minutes % 60 === 0 ? ['hour', minutes / 60] : ['minute', minutes];
+  return new Intl.NumberFormat(LOCALE, { style: 'unit', unit, unitDisplay: 'long' }).format(n);
+}
+
+const money = (minor: number): string => priced(minor, currency, LOCALE);
+
+/** 540 is 09:00. */
+function clock(minutes: number): string {
+  return `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** monday … sunday in the site's language: 1 January 2024 was a Monday. */
+const WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+function weekday(day: string): string {
+  const at = WEEK.indexOf(day);
+  return at < 0 ? day : new Intl.DateTimeFormat(LOCALE, { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2024, 0, 1 + at)));
+}
+
+/*
+ * The titles a slug stands for: a `ref` names its collection, and a
+ * resource's `does` names services of the diary's own.
+ */
+const titles = new Map<string, Map<string, string>>();
+async function titlesOf(name: string | undefined): Promise<Map<string, string>> {
+  if (!name || !COLLECTIONS.some((one) => one.name === name)) return new Map();
+  if (!titles.has(name)) {
+    titles.set(name, new Map((await everyEntry(name)).map((one) => [one.id, String(one.data.title ?? one.id)])));
+  }
+  return titles.get(name)!;
+}
+
+/** One value as words, for a field that is drawn plain. */
+async function spoken(field: Field, value: unknown): Promise<string> {
+  if (value === undefined || value === null || value === '') return '';
+  switch (field.kind) {
+    case 'money': return money(Number(value));
+    case 'duration': return length(Number(value));
+    case 'time_of_day': return clock(Number(value));
+    case 'date': {
+      const day = new Date(String(value));
+      return Number.isNaN(day.getTime()) ? String(value) : new Intl.DateTimeFormat(LOCALE, { dateStyle: 'long', timeZone: 'UTC' }).format(day);
+    }
+    case 'select': {
+      const label = field.option_labels?.[String(value)];
+      if (label !== undefined) return words(label);
+      return WEEK.includes(String(value)) ? weekday(String(value)) : String(value);
+    }
+    case 'bool': return value === true ? words(field.label) : '';
+    case 'ref': return (await titlesOf(field.ref)).get(String(value)) ?? String(value);
+    case 'list': return '';
+    default:
+      if (field.key === 'service' && MODULES.bookings?.services) {
+        return (await titlesOf(MODULES.bookings.services)).get(String(value)) ?? String(value);
+      }
+      return String(value);
+  }
+}
+
+/** A row of a list as one line: a week's row is «понеділок 09:00–18:00». */
+async function rowSaid(of: Field[], row: Record<string, unknown>): Promise<string> {
+  const keys = new Set(of.map((one) => one.key));
+  if (keys.has('opens') && keys.has('closes')) {
+    const day = of.find((one) => one.key === 'day');
+    const when = `${clock(Number(row.opens))}–${clock(Number(row.closes))}`;
+    return day ? `${await spoken(day, row.day)} ${when}` : when;
+  }
+  const parts: string[] = [];
+  for (const one of of) {
+    const part = await spoken(one, row[one.key]);
+    if (part !== '') parts.push(part);
+  }
+  return parts.join(' · ');
+}
+
+type Picture = { file: ImageMetadata; alt: string; path: string };
+type Fact =
+  | { key: string; label: string; kind: 'pictures'; pictures: Picture[] }
+  | { key: string; label: string; kind: 'picture'; file: ImageMetadata; path: string }
+  | { key: string; label: string; kind: 'text'; text: string; path?: string; href?: string }
+  | { key: string; label: string; kind: 'rows'; rows: string[] };
+
+const facts: Fact[] = [];
+for (const field of BLOCKS.find((one) => one.type === collection.type)?.fields ?? []) {
+  if (DRAWN.has(field.key)) continue;
+  const value = data[field.key];
+  if (value === undefined || value === null || value === '') continue;
+  const label = words(field.label);
+  const path = `blocks[0].${field.key}`;
+
+  if (field.kind === 'media') {
+    const files = (field.multiple ? records(value) : [{ src: value, alt: title }])
+      .map((one, index) => {
+        const src = String(one.src ?? '');
+        return { file: isUpload(src) ? uploaded(src) : photo(src), alt: String(one.alt ?? title), path: `${path}[${index}].src` };
+      })
+      .filter((one): one is Picture => one.file !== undefined);
+    if (files.length === 0) continue;
+    if (field.multiple) facts.push({ key: field.key, label, kind: 'pictures', pictures: files });
+    else facts.push({ key: field.key, label, kind: 'picture', file: files[0].file, path });
+    continue;
+  }
+  if (field.kind === 'list') {
+    const rows: string[] = [];
+    for (const row of records(value)) {
+      const line = await rowSaid(field.of ?? [], row);
+      if (line !== '') rows.push(line);
+    }
+    if (rows.length > 0) facts.push({ key: field.key, label, kind: 'rows', rows });
+    continue;
+  }
+  const text = await spoken(field, value);
+  if (text === '') continue;
+  const href = field.kind === 'url' ? String(value) : field.kind === 'email' ? `mailto:${value}` : field.kind === 'tel' ? `tel:${String(value).replace(/[^+\d]/g, '')}` : undefined;
+  facts.push({ key: field.key, label, kind: 'text', text, href, path: tappable(field) ? path : undefined });
+}
 
 /**
  * The entry as a thing search engines and assistants can quote.
@@ -126,12 +283,42 @@ const schema = {
         )
       }
 
+      {
+        facts.length > 0 && (
+          <dl class="entry-facts">
+            {facts.map((fact) => (
+              <div class="entry-fact" data-field={fact.key}>
+                <dt>{fact.label}</dt>
+                {fact.kind === 'text' && (
+                  <dd data-jtk-path={fact.path}>{fact.href ? <a href={fact.href}>{fact.text}</a> : fact.text}</dd>
+                )}
+                {fact.kind === 'rows' && (
+                  <dd><ul>{fact.rows.map((row) => <li>{row}</li>)}</ul></dd>
+                )}
+                {fact.kind === 'picture' && (
+                  <dd>
+                    <Image src={fact.file} alt={title} data-jtk-path={fact.path} widths={[640, 1280]} sizes="(min-width: 900px) 30rem, 92vw" layout="none" />
+                  </dd>
+                )}
+                {fact.kind === 'pictures' && (
+                  <dd class="entry-wall">
+                    {fact.pictures.map((one) => (
+                      <Image src={one.file} alt={one.alt} data-jtk-path={one.path} widths={[640, 1280]} sizes="(min-width: 900px) 30rem, 92vw" layout="none" />
+                    ))}
+                  </dd>
+                )}
+              </div>
+            ))}
+          </dl>
+        )
+      }
+
       {/*
         One element for the whole body, because the body is one field. The
         editor opens it full screen — nine hundred words is not a popover — and
         what is inside is markdown Astro rendered, pictures and all.
       */}
-      <div class="entry-body" data-jtk-path="blocks[0].body"><Content /></div>
+      {hasBody && <div class="entry-body" data-jtk-path="blocks[0].body"><Content /></div>}
 
       {/*
         And the rest of the post, in the order the owner put it in.
