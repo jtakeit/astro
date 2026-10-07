@@ -149,6 +149,16 @@ try {
   writeFileSync(join(dir, 'bad.json'), '{"kind": "car_rental"}');
   if (!refused(['--kit', join(dir, 'bad.json')])) fail('a file that is not a kit was laid out');
 
+  // --out naming a file is refused with a sentence, not a stack trace.
+  writeFileSync(join(dir, 'a-file'), 'not a directory');
+  let whined = '';
+  try {
+    execFileSync('node', [bin, 'create', 'smoke-file', '--out', join(dir, 'a-file'), '--no-git'], { stdio: 'pipe' });
+  } catch (why) {
+    whined = String(why.stderr);
+  }
+  if (!whined.includes('is a file, not a directory') || whined.includes('readdirSync')) fail(`--out on a file: ${whined || 'was not refused'}`);
+
   console.log('smoke: the scaffold is whole');
 } finally {
   rmSync(dir, { recursive: true, force: true });
