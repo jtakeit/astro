@@ -56,8 +56,8 @@ test('the words are the locale\'s, the letting business\'s by the day, and the p
   const said = /data-words="([^"]*)"/.exec(daily)[1].replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&amp;', '&');
   assert.equal(JSON.parse(said).pick, 'Оберіть дати');
   // An unknown language reads as English rather than a crash.
-  assert.ok(renderBookingForm({ services, locale: 'fr', now }).includes('>Book</button>'));
-  assert.deepEqual([...LOCALES], ['uk', 'de', 'en']);
+  assert.ok(renderBookingForm({ services, locale: 'pl', now }).includes('>Book</button>'));
+  assert.deepEqual([...LOCALES], ['uk', 'de', 'en', 'ru', 'es', 'it', 'pt', 'fr']);
   assert.equal(wordsFor('de').book, 'Termin buchen');
   assert.equal(wordsFor('de', 'daily').time, 'Tage');
 });

@@ -108,7 +108,7 @@ export function checkKit(kit, from) {
 /** The language a kit's words are taken in: the site's, or English where the kit has not got it. */
 export function kitLanguage(locale) {
   const lang = String(locale ?? '').slice(0, 2);
-  return ['uk', 'en', 'de'].includes(lang) ? lang : 'en';
+  return ['uk', 'en', 'de', 'ru', 'es', 'it', 'pt', 'fr'].includes(lang) ? lang : 'en';
 }
 
 /**

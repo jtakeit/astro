@@ -84,7 +84,7 @@ export function renderBookingForm(props) {
   if (!Array.isArray(services)) throw new TypeError('renderBookingForm: services is a list of { slug, title }');
   const unsaid = kind !== '' && kind !== 'salon';
   const WORDS = wordsFor(locale, scale);
-  const lang = locale === 'de' ? 'de-CH' : locale === 'uk' ? 'uk-UA' : 'en';
+  const lang = { de: 'de-CH', uk: 'uk-UA', ru: 'ru-RU', es: 'es-ES', it: 'it-IT', pt: 'pt-PT', fr: 'fr-FR' }[locale] ?? 'en';
 
   // The checklist's runs, in the order the services came, each heading once.
   /** @type {{ group: string; items: Named[] }[]} */
