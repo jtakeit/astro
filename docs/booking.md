@@ -5,10 +5,18 @@ own host answer everything a visitor needs, and nothing about availability is
 computed in the repository — which is what lets the owner change their hours
 in the admin and have the site offer them the next minute, with no rebuild.
 
-Template: `src/components/BookingForm.astro`. Copy it,
-keep the script, restyle the markup. The contract in full is
+Template: `src/components/BookingForm.astro` — a wrapper over
+[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit): the markup from `renderBookingForm`, the
+behaviour from the `<jtk-booking>` element, the legible-and-nothing-more styles
+from `@jtakeit/kit/booking.css`. Restyle the markup; the behaviour is the
+platform's protocol and is the kit's to keep, not the site's to rewrite. The
+contract in full is
 [bookings-on-the-site](https://jtakeit.com/docs/guides/bookings-on-the-site)
 in the platform's docs.
+
+A site on another generator takes the same two pieces without Astro:
+`renderBookingForm(...)` at build time, where the booking page is made, and
+`import '@jtakeit/kit/elements/booking'` once on the page.
 
 ## Turning it on
 

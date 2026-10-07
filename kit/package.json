@@ -1,0 +1,39 @@
+{
+  "name": "@jtakeit/kit",
+  "version": "0.1.0",
+  "description": "The framework-free half of a site on jtakeit: the booking form as an element and as markup, for Astro through @jtakeit/astro and for any other generator directly",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./booking": "./lib/booking/render.mjs",
+    "./booking/words": "./lib/booking/words.mjs",
+    "./money": "./lib/money.mjs",
+    "./elements/booking": "./elements/booking.js",
+    "./booking.css": "./booking.css"
+  },
+  "files": [
+    "index.mjs",
+    "lib",
+    "elements",
+    "booking.css",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jtakeit/astro.git",
+    "directory": "kit"
+  },
+  "keywords": [
+    "jtakeit",
+    "booking",
+    "custom-element",
+    "static-site"
+  ],
+  "scripts": {
+    "test": "node --test"
+  }
+}

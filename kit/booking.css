@@ -1,0 +1,36 @@
+/*
+ * The booking form, legible and nothing more.
+ *
+ * A reference, not a design: `field`, `field__input`, `booking__slot` and
+ * `booking__submit` are names for the site to restyle with its own fields and
+ * buttons, the way the scaffold's booking.md asks. Keep the `data-*` hooks and
+ * the `[hidden]` rule below whatever you do to the rest.
+ */
+.booking { display: grid; gap: var(--space-4, 1rem); max-width: 34rem; }
+
+/* The kind's words, until the platform has said them: the space kept, the
+   salon's word not shown at a car rental. */
+.booking--unsaid [data-say], .booking--unsaid [data-say-wait] { visibility: hidden; }
+
+.booking__times { border: 0; padding: 0; margin: 0; }
+.booking__services { border: 0; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+.booking__run { display: grid; gap: 0.35rem; }
+.booking__run-title { margin: 0.5rem 0 0.15rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+.booking__service { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: baseline; padding: 0.45rem 0; border-block-end: 1px solid var(--line, #e5e1d8); cursor: pointer; }
+.booking__service-meta { font-size: 0.85em; opacity: 0.7; white-space: nowrap; }
+.booking__total { margin: 0.25rem 0 0; font-weight: 600; }
+.booking__slots { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.booking__slot {
+  font: inherit; padding: 0.45rem 0.75rem; border-radius: var(--radius-sm, 0.5rem);
+  border: 1px solid var(--color-line, currentColor); background: transparent; color: inherit; cursor: pointer;
+}
+.booking__slot.is-chosen { background: var(--color-ink, #111); color: var(--color-bg, #fff); border-color: var(--color-ink, #111); }
+.booking__hint, .booking__note { margin: 0; opacity: 0.75; }
+.booking__links { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin: 0; }
+.booking__done-line { font-weight: 600; margin: 0; }
+.booking__done-when { margin: 0; }
+
+/* `hidden` means hidden, whatever the element's class says: every state here
+   is shown and hidden by the attribute, and a class that sets `display` would
+   otherwise win (an agent's rehearsal, 30 September 2026). */
+.booking [hidden] { display: none !important; }

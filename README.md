@@ -10,7 +10,12 @@ domain. What the platform holds a repository to is small — a `jtk/catalogue.js
 that validates, a `data-jtk-path` on every editable field, a `dist/` from an Astro
 build — and this package is that contract with a page already on it.
 
-Astro is the only generator the platform builds today.
+This is the one scaffold the platform ships, and it is Astro's. The platform
+builds whatever writes a `dist/` that keeps the contract; on another generator
+the site is laid out by hand — [connecting a site](https://jtakeit.com/docs/guides/connecting-a-site),
+*On another generator* — and takes the pieces worth not writing twice from
+[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit), which this scaffold uses itself: the booking
+form as markup and as the `<jtk-booking>` element.
 
 ## Scaffold
 
