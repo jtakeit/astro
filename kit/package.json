@@ -1,0 +1,53 @@
+{
+  "name": "@jtakeit/kit",
+  "version": "0.1.0",
+  "description": "The framework-free half of a site on jtakeit: the booking form as an element and as markup, for Astro through @jtakeit/astro and for any other generator directly",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "jtkit": "bin/jtkit.mjs"
+  },
+  "exports": {
+    ".": { "types": "./types/index.d.ts", "default": "./index.mjs" },
+    "./booking": { "types": "./types/booking.d.ts", "default": "./lib/booking/render.mjs" },
+    "./booking/words": { "types": "./types/words.d.ts", "default": "./lib/booking/words.mjs" },
+    "./lead": { "types": "./types/lead.d.ts", "default": "./lib/lead/render.mjs" },
+    "./money": { "types": "./types/money.d.ts", "default": "./lib/money.mjs" },
+    "./meta": { "types": "./types/meta.d.ts", "default": "./lib/meta.mjs" },
+    "./kits": { "types": "./types/kits.d.ts", "default": "./lib/kits.mjs" },
+    "./catalogue": "./lib/catalogue.mjs",
+    "./codes": "./lib/codes.mjs",
+    "./elements/booking": { "types": "./types/elements-booking.d.ts", "default": "./elements/booking.js" },
+    "./elements/lead": { "types": "./types/elements-lead.d.ts", "default": "./elements/lead.js" },
+    "./elements/alive": { "types": "./types/alive.d.ts", "default": "./elements/alive.js" },
+    "./booking.css": "./booking.css",
+    "./lead.css": "./lead.css"
+  },
+  "files": [
+    "index.mjs",
+    "bin",
+    "lib",
+    "elements",
+    "types",
+    "booking.css",
+    "lead.css",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jtakeit/astro.git",
+    "directory": "kit"
+  },
+  "keywords": [
+    "jtakeit",
+    "booking",
+    "custom-element",
+    "static-site"
+  ],
+  "scripts": {
+    "test": "node --test"
+  }
+}

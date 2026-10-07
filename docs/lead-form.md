@@ -6,7 +6,14 @@ enquiry goes — a Telegram chat, an address, the panel's inbox — is the owner
 setting in the panel, never the repository's; what the form collects is the
 site's, declared in the catalogue (`collects: enquiry`, and the block's `asks`).
 
-Template: `src/components/LeadForm.astro`.
+Template: `src/components/LeadForm.astro` — a wrapper over
+[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit): the markup
+from `renderLeadForm`, the in-place submission from the `<jtk-lead>` element,
+the legible minimum from `@jtakeit/kit/lead.css`. The component reads the
+block's words and the catalogue's `asks` and says where `/api/lead` is from
+the page; a site on another generator calls the same two pieces without
+Astro. Restyle the markup; keep the control names, the honeypot and the
+`data-*` hooks.
 
 ## The band it sits in
 

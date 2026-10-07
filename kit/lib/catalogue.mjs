@@ -64,7 +64,6 @@ const flag = (name, fallback) => {
 };
 
 const root = resolve(flag('root', process.cwd()));
-const declaration = join(root, 'src', 'catalogue-declaration');
 
 function die(message) {
   console.error(`jtk catalogue: ${message}`);
@@ -77,20 +76,31 @@ function die(message) {
 // which is why the declaration may hold interfaces and `satisfies` and still be
 // readable here with no build step and no dependency — and why it is a module
 // rather than a JSON file a person edits with no type checking at all.
+//
+// `src/content/blocks.ts` is where the scaffold keeps it; a site on another
+// generator says where its own is with `--declaration`. What the module
+// exports is the contract — BLOCKS, PAGE_SEO, BUSINESS_FACTS, COLLECTIONS,
+// MODULES, LOCALES — not where it lives.
 
-const source = join(root, 'src', 'content', 'blocks.ts');
+const declarationPath = flag('declaration', join('src', 'content', 'blocks.ts'));
+const source = resolve(root, declarationPath);
 if (!existsSync(source)) {
-  die(`no src/content/blocks.ts — that file is what says which fields the admin may edit.
-     A site without one cannot be attached to the admin; copy the scaffold's and cut it down.`);
+  die(`no ${declarationPath} — that file is what says which fields the admin may edit.
+     A site without one cannot be attached to the admin; copy the scaffold's and cut it down,
+     or say where yours is: --declaration <file>.`);
 }
 
 let declared;
 try {
   declared = await import(pathToFileURL(source).href);
 } catch (why) {
-  die(`could not read src/content/blocks.ts: ${why.message}
+  die(`could not read ${declarationPath}: ${why.message}
      Node runs TypeScript by stripping types, so the file may hold no enums and no namespaces.`);
 }
+
+// Who wrote the file, for the record: this package, unless the scaffold
+// that owns the declaration says it did (`@jtakeit/astro` passes --generator).
+const GENERATOR = flag('generator', `@jtakeit/kit@${TOOL_VERSION}`);
 
 const catalogue = {
   /*
@@ -108,7 +118,7 @@ const catalogue = {
    * dependencies for exactly the same reason.
    */
   contract: 2,
-  generator: `@jtakeit/astro@${TOOL_VERSION}`,
+  generator: GENERATOR,
   blocks: declared.BLOCKS ?? [],
   page_seo: declared.PAGE_SEO ?? [],
   business_facts: declared.BUSINESS_FACTS ?? [],
@@ -680,7 +690,9 @@ function sourceFiles(dir) {
       found.push(...sourceFiles(full));
       continue;
     }
-    if (/\.(astro|ts|tsx|css)$/.test(entry.name)) found.push(full);
+    // Whatever a generator writes a page in: the check is for an address a
+    // person typed, and those are typed in any of these.
+    if (/\.(astro|ts|tsx|js|jsx|mjs|vue|svelte|html|njk|liquid|hbs|css)$/.test(entry.name)) found.push(full);
   }
   return found;
 }
@@ -1578,7 +1590,14 @@ for (const [at, found] of annotationsByPage) {
  * the only proof that does not depend on how the site is written: whatever the
  * link went through, this is what came out. About five seconds on a whole site.
  */
-if (!flag('dist')) {
+// Astro's build takes `--outDir`, which is what lets this run into a directory
+// that is thrown away. Another generator is asked with `--dist`: build it once
+// yourself with a path in SITE_URL and point this at the result — which is the
+// same proof, made by hand.
+if (!flag('dist') && !existsSync(join(root, 'astro.config.mjs'))) {
+  console.log('not an Astro project: the second build under a path is skipped — build with SITE_URL=https://x.invalid/p/check/ and run again with --dist <dir> to prove the addresses');
+}
+if (!flag('dist') && existsSync(join(root, 'astro.config.mjs'))) {
   const prefix = '/p/fl-check/';
   const out = join(root, '.fl-prefix-check');
 
