@@ -97,16 +97,79 @@ which is what `paths` annotates — and `asks` are the catalogue's, drawn fixed.
 `@jtakeit/kit/lead.css` is the legible minimum; keep `.trap` off-screen
 whatever you restyle.
 
+## `_meta.json`, and the specimen pages
+
+What the edge needs to know that the HTML cannot say: the redirects, the
+unfinished entries (built, and served only to an editing session), and the
+directory whose file names carry a content hash, which the edge caches for a
+year. The scaffold writes it from an Astro hook; any build step can:
+
+```js
+import { writeMeta } from '@jtakeit/kit/meta';
+
+await writeMeta('dist', {
+  collections, blocks, locales,      // the declaration: the specimens are derived from it
+  immutable: ['/_next/static/'],     // where this generator keeps its hashed files; absent, the edge assumes Astro's
+  redirects: [{ from: '/old', to: '/new', status: 301 }],
+});
+```
+
+The **specimen pages** are the one thing in that list a site has to build as
+well as declare: one page per block a post may hold, at
+`<collection prefix>/_fl-<type>[-<view>]/` and per extra language — the panel
+lifts the markup for a block the owner has just put into a post from there,
+in the site's own stylesheet. `specimenAddresses(collections, blocks,
+locales)` is the rule; build a page at each address that renders the block
+once, and `writeMeta` lists them as drafts so a stranger never sees one.
+
+A script that attaches to a selector attaches again on the markup the panel
+places — `onAlive(selector, start)` from `@jtakeit/kit/elements/alive` is the
+shape, and it listens for the panel's `fl:placed`.
+
+## A kit, laid out
+
+A business of a kind the platform knows starts from its kit — the
+collections, the rates and the settings, judged on the platform's side:
+
+```
+npx @jtakeit/kit apply --kit car_rental --locale uk      # asked of the platform by its kind
+npx @jtakeit/kit apply --kit ./car_rental.json           # or a file of it
+```
+
+writes `jtk/bookings.json` with `page` at the services' listing and `kit` /
+`kit_version` recorded, the rates as entries under `jtk/content`, and the
+kit's block types, collections and module into `jtk/catalogue.json` (a type
+or a collection the site already has by that name is left alone). The
+scaffold does the same through `jtk create --kit`, writing the declaration
+into `src/content/blocks.ts` instead of the catalogue file. `@jtakeit/kit/kits`
+has the pieces — `loadKit`, `kitSettings`, `kitEntries`,
+`mergeKitIntoCatalogue`, `layKitFiles` — for a tool of your own.
+
+## The catalogue tool
+
+```
+npx @jtakeit/kit catalogue --declaration src/content/blocks.ts --emit-only
+npx @jtakeit/kit catalogue --declaration src/content/blocks.ts --dist ./dist
+npx @jtakeit/kit catalogue … --judge        # and ask the platform's validator whether we agree
+```
+
+Derives `jtk/catalogue.json` from a declaration module — the scaffold's
+`src/content/blocks.ts` shape: `BLOCKS`, `PAGE_SEO`, `BUSINESS_FACTS`,
+`COLLECTIONS`, `MODULES`, `LOCALES` — and checks it against a built `dist/`
+both ways: every declared field rendered with its `data-jtk-path`, every
+annotated path declared. On an Astro project it also builds once more under
+a path to prove every address stays inside the preview; on another generator
+build that way yourself (`SITE_URL=https://x.invalid/p/check/`) and pass
+`--dist`. `@jtakeit/astro catalogue` is this tool, signing the file as the
+scaffold.
+
 ## Also here
 
 - `@jtakeit/kit/money` — a price as the page says it: «2 300 ₴», no kopecks
   on a whole price, no sign where the site has not said its currency.
 - `@jtakeit/kit/booking/words` — the form's words per language, the salon's
   and the letting business's by the day, before the platform corrects them.
+- `@jtakeit/kit/codes` — the catalogue's error codes, a copy of the platform's
+  table that `--judge` keeps honest.
 
-## What is next
-
-The lead form the same way, then the catalogue tool, the kits, the
-specimen-address rule and the `_meta.json` writer — everything of the
-scaffold's that a site on anything could use. `@jtakeit/astro` stays the
-scaffold and becomes a thin wrapper over this.
+`@jtakeit/astro` stays the scaffold and is a thin layer over all of this.
