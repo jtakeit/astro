@@ -11,7 +11,11 @@
  *   import { renderBookingForm } from '@jtakeit/kit/booking';   // build time
  *   import '@jtakeit/kit/elements/booking';                      // the page
  *   @import '@jtakeit/kit/booking.css';                          // optional
+ *
+ * and the enquiry form the same way: `@jtakeit/kit/lead`,
+ * `@jtakeit/kit/elements/lead`, `@jtakeit/kit/lead.css`.
  */
 export { renderBookingForm, SENDS } from './lib/booking/render.mjs';
+export { renderLeadForm, inputType } from './lib/lead/render.mjs';
 export { wordsFor, LOCALES } from './lib/booking/words.mjs';
 export { money } from './lib/money.mjs';

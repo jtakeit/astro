@@ -67,6 +67,36 @@ Under `base` — a site served from a path, which every preview is — pass
 `api` as your generator writes a root-relative address, so the form posts to
 `/p/<slug>/api/book` on the preview and to `/api/book` on the site's own host.
 
+## The enquiry form
+
+`/api/lead`, which the platform serves beside every site. The form is a real
+`<form method="post">` first — with scripts off the browser posts it and the
+platform answers with a page — and the element only spares a working browser
+the navigation. What the build's lint holds it to: a `name` control, one of
+`contact`, `phone` or `email`, the honeypot `website`, and nothing else that
+the collecting block does not declare in `asks`
+([the contract](https://jtakeit.com/docs/reference/contract.md)).
+
+```js
+import { renderLeadForm } from '@jtakeit/kit/lead';
+
+const html = renderLeadForm({
+  action: `${base}api/lead`,      // under the preview the site is served at /p/<slug>/
+  copy: { title, lead, name, contact, message, requiredNote, submit, sending, success, error, invalidName, invalidContact },
+  asks: [{ key: 'topic', label: 'What it is about', kind: 'text', max: 120 }],   // the block's `asks`, labels resolved
+  paths: { title: 'blocks[3].title', lead: 'blocks[3].lead', name_label: 'blocks[3].name_label', /* … */ },  // the block's fields' data-jtk-path, when annotating
+});
+```
+
+```html
+<script type="module">import '@jtakeit/kit/elements/lead';</script>
+```
+
+`copy` is the collecting block's own words — the owner edits them by tapping,
+which is what `paths` annotates — and `asks` are the catalogue's, drawn fixed.
+`@jtakeit/kit/lead.css` is the legible minimum; keep `.trap` off-screen
+whatever you restyle.
+
 ## Also here
 
 - `@jtakeit/kit/money` — a price as the page says it: «2 300 ₴», no kopecks

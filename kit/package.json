@@ -8,15 +8,19 @@
     ".": "./index.mjs",
     "./booking": "./lib/booking/render.mjs",
     "./booking/words": "./lib/booking/words.mjs",
+    "./lead": "./lib/lead/render.mjs",
     "./money": "./lib/money.mjs",
     "./elements/booking": "./elements/booking.js",
-    "./booking.css": "./booking.css"
+    "./elements/lead": "./elements/lead.js",
+    "./booking.css": "./booking.css",
+    "./lead.css": "./lead.css"
   },
   "files": [
     "index.mjs",
     "lib",
     "elements",
     "booking.css",
+    "lead.css",
     "README.md"
   ],
   "engines": {
