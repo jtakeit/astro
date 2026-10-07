@@ -6,7 +6,7 @@ computed in the repository — which is what lets the owner change their hours
 in the admin and have the site offer them the next minute, with no rebuild.
 
 Template: `src/components/BookingForm.astro` — a wrapper over
-[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit): the markup from `renderBookingForm`, the
+[`@jtakeit/kit`](https://github.com/jtakeit/jtakeit-kit/tree/main/kit): the markup from `renderBookingForm`, the
 behaviour from the `<jtk-booking>` element, the legible-and-nothing-more styles
 from `@jtakeit/kit/booking.css`. Restyle the markup; the behaviour is the
 platform's protocol and is the kit's to keep, not the site's to rewrite. The

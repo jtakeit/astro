@@ -14,7 +14,7 @@ This is the one scaffold the platform ships, and it is Astro's. The platform
 builds whatever writes a `dist/` that keeps the contract; on another generator
 the site is laid out by hand — [connecting a site](https://jtakeit.com/docs/guides/connecting-a-site),
 *On another generator* — and takes the pieces worth not writing twice from
-[`@jtakeit/kit`](https://github.com/jtakeit/astro/tree/main/kit), which this scaffold uses itself: the booking
+[`@jtakeit/kit`](https://github.com/jtakeit/jtakeit-kit/tree/main/kit), which this scaffold uses itself: the booking
 form and the enquiry form as markup and as elements, `_meta.json` and the
 specimen rule, a kit laid out, and the catalogue tool.
 

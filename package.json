@@ -20,9 +20,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jtakeit/astro.git"
+    "url": "https://github.com/jtakeit/jtakeit-kit.git"
   },
-  "homepage": "https://github.com/jtakeit/astro#readme",
+  "homepage": "https://github.com/jtakeit/jtakeit-kit#readme",
   "keywords": [
     "jtakeit",
     "astro",
