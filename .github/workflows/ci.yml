@@ -1,0 +1,34 @@
+# The kit's checks: every pull request and every push to main runs the tests
+# of both packages and packs both the way `npm publish` would, so a file left
+# out of `files` is found here and not by the first site that installs the
+# release. One job, named for the ruleset that requires it.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - name: Pack both packages as publish would
+        run: |
+          npm pack --workspace kit --dry-run 2>&1 | grep -E 'package size|total files'
+          npm pack --dry-run 2>&1 | grep -E 'package size|total files'
+      - name: A scaffold is laid out from the checkout and builds
+        run: |
+          node bin/jtk.mjs create /tmp/probe --kit salon --locale en
+          cd /tmp/probe && npm install --no-audit --no-fund && npm run build
