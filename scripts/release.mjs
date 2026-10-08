@@ -101,6 +101,10 @@ if (command === 'bump') {
     template.dependencies['@jtakeit/kit'] = kitNext; writeJSON(FILES.template, template);
   }
   run('npm', ['install', '--no-audit', '--no-fund']);
+  // The template's own lockfile too: it is what every new site runs `npm ci`
+  // against, and a release went out with it a version behind — the builder's
+  // image refused to install, and so would every site laid out from it.
+  run('npm', ['install', '--package-lock-only', '--no-audit', '--no-fund', '--prefix', 'template']);
   run('npm', ['test']);
   console.log(`
 Done. What is left is yours:
