@@ -31,7 +31,8 @@
     "agent"
   ],
   "scripts": {
-    "test": "node test/smoke.mjs && npm test --workspace kit"
+    "test": "node test/smoke.mjs && npm test --workspace kit",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@jtakeit/kit": "0.1.0"
