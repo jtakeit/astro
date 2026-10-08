@@ -5,6 +5,8 @@ export interface Named {
   costs?: number;
   /** A price by the hour of the week instead of `costs`: rows of a day, a span and a price. The list says «from …»; the price is the slot's. */
   rates?: { day: string; from: number; until: number; costs: number }[];
+  /** `'person'` for a price times the party — a class per place, shoes; the list says so and the running total multiplies. */
+  per?: 'booking' | 'person';
   group?: string;
 }
 

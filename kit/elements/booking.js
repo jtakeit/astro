@@ -9,7 +9,7 @@
  *
  *   GET  /api/turnstile             the widget's key, or "" for none
  *   GET  /api/availability?service=…&from=…&to=…[&resource=…][&party=…][&count=…]
- *        → { zone, slots[{start, free, ends, costs_minor}], party_max, scale, services[{slug,
+ *        → { zone, slots[{start, free, ends, costs_minor}], party_max, quantity_max, scale, services[{slug,
  *            scale, takes, fewest, most}], prices{class: minor}, currency, … }
  *   POST /api/book                  → { id, state, amount_minor, currency, token, manage_path, telegram_url }
  *   POST /api/pay                   → { url } — only when amount_minor > 0
@@ -113,13 +113,18 @@ export function wireBooking(form) {
     const chosenBoxes = boxes.filter((b) => b.checked);
     if (chosenBoxes.length < 2) { total.hidden = true; return; }
     const minutes = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.takes ?? 0), 0);
-    const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0), 0);
+    // A price per person is times the party (wiki/70); the slot's price is
+    // the platform's, this is the list's own running sum.
+    const people = partyField.hidden ? 1 : Number(party.value) || 1;
+    const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0) * (b.dataset.per === 'person' ? people : 1), 0);
     const price = minor > 0 ? ' · ' + money(minor, form.dataset.currency, pageLang()) : '';
     total.textContent = `${words.total}: ${minutes} min${price}`;
     total.hidden = false;
   }
   const resource = /** @type {HTMLSelectElement | null} */ (form.querySelector('[name=resource]'));
   /** @type {HTMLSelectElement} */ const party = q('[name=party]');
+  /** @type {HTMLSelectElement} */ const quantity = q('[name=quantity]');
+  /** @type {HTMLElement} */ const quantityField = q('[data-quantity-field]');
   /** @type {HTMLSelectElement} */ const hours = q('[name=hours]');
   /** @type {HTMLElement} */ const hoursField = q('[data-hours-field]');
   /** @type {HTMLElement} */ const partyField = q('[data-party-field]');
@@ -221,10 +226,34 @@ export function wireBooking(form) {
     }
     if (partyField.hidden) {
       partyField.hidden = false;
-      party.addEventListener('change', () => void load());
+      party.addEventListener('change', () => { showTotal(); void load(); });
     }
   }
 
+  /**
+   * How many of the class one request may take (wiki/69): the settings'
+   * most, and no more than are free at the chosen time. Hidden at one, and
+   * when a resource is named — a name is one thing.
+   * @param {number} most
+   * @param {number} free
+   */
+  function offerQuantity(most, free) {
+    if (most <= 1 || resourceChosen()) { quantityField.hidden = true; return; }
+    const cap = Math.max(1, Math.min(most, free || most));
+    const was = quantity.value;
+    quantity.textContent = '';
+    for (let n = 1; n <= cap; n++) {
+      const option = document.createElement('option');
+      option.value = String(n);
+      option.textContent = String(n);
+      quantity.appendChild(option);
+    }
+    quantity.value = was && Number(was) <= cap ? was : '1';
+    quantityField.hidden = false;
+  }
+  function quantityChosen() {
+    return quantityField.hidden ? 1 : Number(quantity.value) || 1;
+  }
   /** @param {string} text */
   function say(text) {
     error.textContent = text;
@@ -471,6 +500,7 @@ export function wireBooking(form) {
       zone = data.zone;
       if (typeof data.scale === 'string') daily = data.scale === 'daily';
       offerParty(data.party_max ?? 0);
+      offerQuantity(data.quantity_max ?? 1, Math.max(0, ...(data.slots ?? []).map((/** @type {{free?: string[]}} */ s) => (s.free ?? []).length)));
       // A platform that says what each service may be taken as: the second
       // date follows it. The first answer may change what was asked — the
       // shortest stay filled in — and is asked once more with it.
@@ -512,6 +542,7 @@ export function wireBooking(form) {
         if (slot.costs_minor > 0) button.textContent += ` · ${money(slot.costs_minor, currency, pageLang())}`;
         button.addEventListener('click', () => {
           chosen = slot.start;
+          offerQuantity(data.quantity_max ?? 1, (slot.free ?? []).length);
           for (const other of slots.querySelectorAll('.booking__slot')) {
             other.classList.remove('is-chosen');
             other.setAttribute('aria-pressed', 'false');
@@ -568,6 +599,7 @@ export function wireBooking(form) {
         // How many of the service — never an end: the platform computes
         // the end and the price from it.
         ...(count() ? { count: count() } : {}),
+        ...(quantityChosen() > 1 ? { quantity: quantityChosen() } : {}),
         start: chosen,
         name, phone, email,
         note: String(data.get('note') ?? ''),
@@ -602,7 +634,7 @@ export function wireBooking(form) {
   });
 
   /**
-   * @param {{ state: string; start: string; ends: string; amount_minor: number; currency: string; id: string; manage_path: string; telegram_url: string; resource?: string; class?: string }} made
+   * @param {{ state: string; start: string; ends: string; amount_minor: number; currency: string; id: string; manage_path: string; telegram_url: string; resource?: string; class?: string; group?: { quantity: number; amount_minor: number; bookings: { resource: string; resource_name?: string }[] } }} made
    */
   function done(made) {
     for (const el of /** @type {NodeListOf<HTMLElement>} */ (form.querySelectorAll('.field, .booking__times, .booking__services, [data-submit], [data-challenge]'))) el.hidden = true;
@@ -618,7 +650,11 @@ export function wireBooking(form) {
     // What was taken: the class promised, where «any free» was chosen; the
     // one by name and marks, where it was chosen — «VW Combi · білий ·
     // AA1234BB». Nothing where the business has one of everything.
-    const what = made.class ? words.anyOf.replace('{class}', made.class) : resourceChosen() ? made.resource ?? '' : '';
+    let what = made.class ? words.anyOf.replace('{class}', made.class) : resourceChosen() ? made.resource ?? '' : '';
+    // A group: the resources it took, and how many together (wiki/69).
+    if (made.group && made.group.quantity > 1) {
+      what = `${made.group.bookings.map((/** @type {{resource_name?: string, resource: string}} */ b) => b.resource_name || b.resource).join(', ')} · ${words.together.replace('{n}', String(made.group.quantity))}`;
+    }
     if (what) {
       /** @type {HTMLElement} */ const line = q('[data-done-what]');
       line.textContent = words.took.replace('{what}', what);
@@ -630,12 +666,14 @@ export function wireBooking(form) {
     /** @type {HTMLAnchorElement} */ const tg = q('[data-telegram]');
     if (made.telegram_url) { tg.href = made.telegram_url; tg.textContent = words.telegram; tg.hidden = false; }
 
-    if (made.amount_minor > 0) {
+    // The group is paid for together: its sum on the button.
+    const owed = made.group && made.group.amount_minor > 0 ? made.group.amount_minor : made.amount_minor;
+    if (owed > 0) {
       /** @type {HTMLElement} */ const note = q('[data-pay-note]');
       note.textContent = words.payNote;
       note.hidden = false;
       /** @type {HTMLAnchorElement} */ const pay = q('[data-pay]');
-      pay.textContent = `${words.pay} · ${money(made.amount_minor, made.currency, pageLang())}`;
+      pay.textContent = `${words.pay} · ${money(owed, made.currency, pageLang())}`;
       pay.href = '#';
       pay.hidden = false;
       pay.addEventListener('click', async (event) => {
