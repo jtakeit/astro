@@ -46,8 +46,18 @@ export const SENDS = Object.freeze(['service', 'services', 'resource', 'class', 
  * @property {string} title   what the visitor reads
  * @property {number} [takes] minutes, for the running total when several are picked
  * @property {number} [costs] minor units, for the same
+ * @property {{ day: string, from: number, until: number, costs: number }[]} [rates] a price by the hour of the week instead of `costs`: the list says «from …», and the price is the slot's, printed beside the time
  * @property {string} [group] a heading the services are listed under
  */
+
+/**
+ * The least a service priced by the hour of the week may cost, or nothing.
+ * @param {Named} one
+ */
+export function priceFrom(one) {
+  const rows = Array.isArray(one.rates) ? one.rates : [];
+  return rows.reduce((least, row) => (row.costs > 0 && (least === 0 || row.costs < least) ? row.costs : least), 0);
+}
 
 /**
  * @typedef {object} BookingFormProps
@@ -68,6 +78,20 @@ const ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#
 /** @param {unknown} value */
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ESCAPE[c]);
+}
+
+/**
+ * A service's price as the list says it: the price, or «from …» for one
+ * priced by the hour of the week — whose price is the slot's and is printed
+ * beside the time once one is chosen (wiki/68).
+ * @param {Named} one
+ * @param {string} currency
+ * @param {string} lang
+ */
+function priceSaid(one, currency, lang) {
+  if (one.costs) return ` · ${esc(money(one.costs, currency, lang))}`;
+  const least = priceFrom(one);
+  return least > 0 ? ` · ${esc(wordsFor(lang).from)} ${esc(money(least, currency, lang))}` : '';
 }
 
 /**
@@ -107,7 +131,7 @@ export function renderBookingForm(props) {
             ${run.items.map((one) => `<label class="booking__service">
                 <input type="checkbox" name="service" value="${esc(one.slug)}" data-takes="${esc(one.takes ?? 0)}" data-costs="${esc(one.costs ?? 0)}">
                 <span class="booking__service-name">${esc(one.title)}</span>
-                <span class="booking__service-meta">${one.takes ? `${esc(one.takes)} min` : ''}${one.costs ? ` · ${esc(money(one.costs, currency, lang))}` : ''}</span>
+                <span class="booking__service-meta">${one.takes ? `${esc(one.takes)} min` : ''}${priceSaid(one, currency, lang)}</span>
               </label>`).join('\n')}
           </div>`).join('\n')}
         <p class="booking__total" data-total hidden></p>

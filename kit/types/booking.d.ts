@@ -3,6 +3,8 @@ export interface Named {
   title: string;
   takes?: number;
   costs?: number;
+  /** A price by the hour of the week instead of `costs`: rows of a day, a span and a price. The list says «from …»; the price is the slot's. */
+  rates?: { day: string; from: number; until: number; costs: number }[];
   group?: string;
 }
 
