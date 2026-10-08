@@ -47,6 +47,7 @@ export const SENDS = Object.freeze(['service', 'services', 'resource', 'class', 
  * @property {number} [takes] minutes, for the running total when several are picked
  * @property {number} [costs] minor units, for the same
  * @property {{ day: string, from: number, until: number, costs: number }[]} [rates] a price by the hour of the week instead of `costs`: the list says «from …», and the price is the slot's, printed beside the time
+ * @property {string} [per]   `'person'` for a price times the party — a class per place, shoes; the list says so and the running total multiplies
  * @property {string} [group] a heading the services are listed under
  */
 
@@ -123,15 +124,19 @@ export function renderBookingForm(props) {
   const today = now.toISOString().slice(0, 10);
   const last = new Date(now.getTime() + daysAhead * 86_400_000).toISOString().slice(0, 10);
 
+  // An add-on — a price and no length: shoes, a racket — is listed under
+  // its own heading, after the services, and rides on the visit (wiki/70).
+  const addOns = runs.flatMap((run) => run.items.filter((one) => !one.takes && (one.costs || priceFrom(one))));
+  const timedRuns = runs.map((run) => ({ ...run, items: run.items.filter((one) => !addOns.includes(one)) })).filter((run) => run.items.length > 0);
   const servicesField = combine
     ? `<fieldset class="booking__services" data-services>
         <legend class="field__label" data-say="services">${esc(WORDS.services)}</legend>
-        ${runs.map((run) => `<div class="booking__run">
+        ${[...timedRuns, ...(addOns.length ? [{ group: WORDS.addOns, items: addOns }] : [])].map((run) => `<div class="booking__run">
             ${run.group !== '' ? `<p class="booking__run-title">${esc(run.group)}</p>` : ''}
             ${run.items.map((one) => `<label class="booking__service">
-                <input type="checkbox" name="service" value="${esc(one.slug)}" data-takes="${esc(one.takes ?? 0)}" data-costs="${esc(one.costs ?? 0)}">
+                <input type="checkbox" name="service" value="${esc(one.slug)}" data-takes="${esc(one.takes ?? 0)}" data-costs="${esc(one.costs ?? 0)}"${one.per === 'person' ? ' data-per="person"' : ''}>
                 <span class="booking__service-name">${esc(one.title)}</span>
-                <span class="booking__service-meta">${one.takes ? `${esc(one.takes)} min` : ''}${priceSaid(one, currency, lang)}</span>
+                <span class="booking__service-meta">${one.takes ? `${esc(one.takes)} min` : ''}${priceSaid(one, currency, lang)}${one.per === 'person' ? ` · ${esc(WORDS.perPerson)}` : ''}</span>
               </label>`).join('\n')}
           </div>`).join('\n')}
         <p class="booking__total" data-total hidden></p>

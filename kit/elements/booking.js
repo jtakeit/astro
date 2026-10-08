@@ -113,7 +113,10 @@ export function wireBooking(form) {
     const chosenBoxes = boxes.filter((b) => b.checked);
     if (chosenBoxes.length < 2) { total.hidden = true; return; }
     const minutes = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.takes ?? 0), 0);
-    const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0), 0);
+    // A price per person is times the party (wiki/70); the slot's price is
+    // the platform's, this is the list's own running sum.
+    const people = partyField.hidden ? 1 : Number(party.value) || 1;
+    const minor = chosenBoxes.reduce((sum, b) => sum + Number(b.dataset.costs ?? 0) * (b.dataset.per === 'person' ? people : 1), 0);
     const price = minor > 0 ? ' · ' + money(minor, form.dataset.currency, pageLang()) : '';
     total.textContent = `${words.total}: ${minutes} min${price}`;
     total.hidden = false;
@@ -223,7 +226,7 @@ export function wireBooking(form) {
     }
     if (partyField.hidden) {
       partyField.hidden = false;
-      party.addEventListener('change', () => void load());
+      party.addEventListener('change', () => { showTotal(); void load(); });
     }
   }
 
