@@ -1,7 +1,7 @@
 // The booking form, as the kit renders it and as its element reads it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderBookingForm, SENDS } from '../lib/booking/render.mjs';
+import { renderBookingForm, SENDS, priceFrom } from '../lib/booking/render.mjs';
 import { wordsFor, LOCALES } from '../lib/booking/words.mjs';
 import { money } from '../lib/money.mjs';
 import { daysBetween, plusDays, lasting, wireBooking, wireAll, defineBooking, JtkBooking } from '../elements/booking.js';
@@ -56,8 +56,8 @@ test('the words are the locale\'s, the letting business\'s by the day, and the p
   const said = /data-words="([^"]*)"/.exec(daily)[1].replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&amp;', '&');
   assert.equal(JSON.parse(said).pick, 'Оберіть дати');
   // An unknown language reads as English rather than a crash.
-  assert.ok(renderBookingForm({ services, locale: 'fr', now }).includes('>Book</button>'));
-  assert.deepEqual([...LOCALES], ['uk', 'de', 'en']);
+  assert.ok(renderBookingForm({ services, locale: 'pl', now }).includes('>Book</button>'));
+  assert.deepEqual([...LOCALES], ['uk', 'de', 'en', 'ru', 'es', 'it', 'pt', 'fr']);
   assert.equal(wordsFor('de').book, 'Termin buchen');
   assert.equal(wordsFor('de', 'daily').time, 'Tage');
 });
@@ -104,4 +104,17 @@ test('the module loads where there is no document, and exports the element for o
   assert.equal(typeof JtkBooking, 'function');
   // Nothing to define under Node: it returns rather than throws.
   assert.doesNotThrow(() => defineBooking());
+});
+
+test('a service priced by the hour of the week says «from», and sends no price of its own', () => {
+  const lane = { slug: 'lane', title: 'Lane', takes: 60, rates: [
+    { day: 'monday', from: 540, until: 1080, costs: 2500 }, { day: 'friday', from: 1080, until: 1440, costs: 4200 },
+  ] };
+  assert.equal(priceFrom(lane), 2500);
+  assert.equal(priceFrom({ slug: 'cut', title: 'Cut', costs: 5500 }), 0);
+  const html = renderBookingForm({ services: [lane, services[0]], locale: 'en', currency: 'EUR', combine: true, now });
+  assert.ok(html.includes('data-costs="0"'), 'the running total cannot know a price that depends on the time');
+  assert.ok(html.includes(`from ${money(2500, 'EUR', 'en')}`), html);
+  assert.ok(html.includes(money(5500, 'EUR', 'en')));
+  for (const locale of LOCALES) assert.ok(wordsFor(locale).from, locale);
 });

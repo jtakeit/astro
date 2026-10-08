@@ -31,7 +31,7 @@ shape, so the form says what it sends and the element sends nothing else.
 import { renderBookingForm } from '@jtakeit/kit/booking';
 
 const html = renderBookingForm({
-  services,                 // [{ slug, title, takes, costs, group }], the entries with `takes`
+  services,                 // [{ slug, title, takes, costs, rates, group }], the entries with `takes`; `rates` instead of `costs` says «from …»
   resources,                // [{ slug, title }] — leave empty for a solo business
   locale: 'uk',             // uk, de or en: the words before the platform has spoken
   combine: settings.combine === true,   // jtk/bookings.json
