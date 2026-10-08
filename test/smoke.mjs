@@ -163,3 +163,19 @@ try {
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
+
+// The template's lockfile names the kit at the version the template depends
+// on: a lockfile a version behind is a scaffold every `npm ci` refuses
+// (0.5.0, 8 October 2026 — the builder's image failed to build from it).
+{
+  const { readFileSync } = await import('node:fs');
+  const manifest = JSON.parse(readFileSync(new URL('../template/package.json', import.meta.url), 'utf8'));
+  const lock = JSON.parse(readFileSync(new URL('../template/package-lock.json', import.meta.url), 'utf8'));
+  const wanted = manifest.dependencies['@jtakeit/kit'];
+  const locked = lock.packages?.['node_modules/@jtakeit/kit']?.version;
+  if (wanted !== locked) {
+    console.error(`smoke: template/package.json wants @jtakeit/kit ${wanted} and template/package-lock.json holds ${locked} — run npm install --package-lock-only in template/`);
+    process.exit(1);
+  }
+  console.log(`smoke: the template's lockfile holds @jtakeit/kit ${locked}, as its manifest wants`);
+}
