@@ -38,7 +38,7 @@ import { wordsFor } from './words.mjs';
  * sends no key that is not here — the list cannot drift from the request,
  * because the element imports this one.
  */
-export const SENDS = Object.freeze(['service', 'services', 'resource', 'class', 'party', 'count', 'start', 'name', 'phone', 'email', 'note', 'turnstile']);
+export const SENDS = Object.freeze(['service', 'services', 'resource', 'class', 'party', 'count', 'quantity', 'start', 'name', 'phone', 'email', 'note', 'turnstile']);
 
 /**
  * @typedef {object} Named
@@ -185,6 +185,11 @@ export function renderBookingForm(props) {
   <div class="field" data-party-field hidden>
     <label class="field__label" for="booking-party">${esc(WORDS.party)}</label>
     <select class="field__input" id="booking-party" name="party"></select>
+  </div>
+
+  <div class="field" data-quantity-field hidden>
+    <label class="field__label" for="booking-quantity">${esc(WORDS.quantity)}</label>
+    <select class="field__input" id="booking-quantity" name="quantity"></select>
   </div>
 
   <fieldset class="field booking__times" data-times>
