@@ -97,6 +97,25 @@ test('the element\'s arithmetic: days by the calendar, hours as the time they ar
   assert.equal(money(5550, undefined, 'en'), '55.50', 'kopecks shown whole once there are any');
 });
 
+// Every language the form speaks says every word the form has: a key one
+// language has and another has not is a sentence the visitor reads in
+// English in the middle of their own — and the placeholders inside a word
+// are the same in each, or the element's replace() leaves one unfilled.
+test('every language has every word, with the same holes in it', () => {
+  const holes = (text) => (text.match(/\{[a-z]+\}/g) ?? []).sort().join(',');
+  for (const scale of ['', 'daily']) {
+    const en = wordsFor('en', scale);
+    for (const locale of LOCALES) {
+      const words = wordsFor(locale, scale);
+      assert.deepEqual(Object.keys(words).sort(), Object.keys(en).sort(), `${locale} (${scale || 'hourly'}) has the English keys`);
+      for (const key of Object.keys(en)) {
+        assert.equal(holes(words[key]), holes(en[key]), `${locale}.${key} keeps the placeholders ${holes(en[key])}`);
+        assert.ok(words[key].trim() !== '', `${locale}.${key} says something`);
+      }
+    }
+  }
+});
+
 test('the module loads where there is no document, and exports the element for one', () => {
   assert.equal(typeof wireBooking, 'function');
   assert.equal(typeof wireAll, 'function');
