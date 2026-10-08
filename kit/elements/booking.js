@@ -9,7 +9,7 @@
  *
  *   GET  /api/turnstile             the widget's key, or "" for none
  *   GET  /api/availability?service=…&from=…&to=…[&resource=…][&party=…][&count=…]
- *        → { zone, slots[{start, free, ends}], party_max, scale, services[{slug,
+ *        → { zone, slots[{start, free, ends, costs_minor}], party_max, scale, services[{slug,
  *            scale, takes, fewest, most}], prices{class: minor}, currency, … }
  *   POST /api/book                  → { id, state, amount_minor, currency, token, manage_path, telegram_url }
  *   POST /api/pay                   → { url } — only when amount_minor > 0
@@ -507,6 +507,9 @@ export function wireBooking(form) {
         button.textContent = daily
           ? slot.ends ? `${dayAndHour(slot.start, false)} — ${dayAndHour(slot.ends, false)}` : dayAndHour(slot.start, false)
           : clock(slot.start);
+        // What the booking starting here costs — the platform's number, every
+        // hour by its own row (wiki/68) — beside the time, whenever one came.
+        if (slot.costs_minor > 0) button.textContent += ` · ${money(slot.costs_minor, currency, pageLang())}`;
         button.addEventListener('click', () => {
           chosen = slot.start;
           for (const other of slots.querySelectorAll('.booking__slot')) {

@@ -53,7 +53,7 @@ import { listed } from '../lib/entries';                                // src/l
 import bookings from '../../jtk/bookings.json';
 const services = (await listed('services')).map((e) => ({
   slug: e.id, title: String(e.data.title),
-  takes: e.data.takes, costs: e.data.costs, group: e.data.group,      // for the checklist's total and headings
+  takes: e.data.takes, costs: e.data.costs, rates: e.data.rates, group: e.data.group, // for the checklist's total and headings; `rates` says «from …»
 }));
 const masters  = (await listed('masters')).map((e) => ({ slug: e.id, title: String(e.data.title) }));
 const combine  = bookings.blocks[0].combine === true;                  // jtk/bookings.json, the owner's setting

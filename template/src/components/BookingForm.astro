@@ -33,6 +33,8 @@ interface Named {
   /** Minutes and minor units, for the running total when several are picked. */
   takes?: number;
   costs?: number;
+  /** A price by the hour of the week instead of `costs` (rows of day, from, until, costs): the list says «from …», the price is the slot's. */
+  rates?: { day: string; from: number; until: number; costs: number }[];
   /** A heading the services are listed under, where the catalogue groups them. */
   group?: string;
 }
