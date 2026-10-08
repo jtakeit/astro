@@ -50,6 +50,21 @@ const run = (cmd, args) => {
 function onNpm(name) {
   try { return sh(`npm view ${name} version`); } catch { return '0.0.0'; }
 }
+
+/**
+ * npm says a published version "may take a few minutes to become
+ * available", and it means it: the first release stopped here with the kit
+ * published and the scaffold not, because the registry answered the old
+ * version for a minute. So: ask again, every ten seconds, for three minutes.
+ */
+async function untilNpmHas(name, version) {
+  for (let tried = 0; tried < 18; tried++) {
+    if (onNpm(name) === version) return true;
+    await new Promise((done) => setTimeout(done, 10_000));
+    process.stdout.write('.');
+  }
+  return false;
+}
 const parse = (v) => v.split('.').map(Number);
 const greater = (a, b) => { const [x, y] = [parse(a), parse(b)]; for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i]; } return false; };
 const max = (a, b) => (greater(a, b) ? a : b);
@@ -107,14 +122,24 @@ if (command === 'publish') {
   if (root.dependencies['@jtakeit/kit'] !== kit.version || template.dependencies['@jtakeit/kit'] !== kit.version) {
     console.error(`the kit is ${kit.version} and is depended on as ${root.dependencies['@jtakeit/kit']} (root) / ${template.dependencies['@jtakeit/kit']} (template): run bump`); process.exit(1);
   }
-  for (const [name, version] of [[kit.name, kit.version], [root.name, root.version]]) {
-    if (onNpm(name) === version) { console.error(`${name}@${version} is already on npm`); process.exit(1); }
+  if (onNpm(kit.name) === kit.version && onNpm(root.name) === root.version) {
+    console.error(`${kit.name}@${kit.version} and ${root.name}@${root.version} are both on npm already: nothing to publish`); process.exit(1);
   }
   run('npm', ['test']);
-  run('npm', ['publish', '--workspace', 'kit', '--access', 'public']);
-  if (!dry && onNpm(kit.name) !== kit.version) { console.error(`npm does not have ${kit.name}@${kit.version} after publishing`); process.exit(1); }
-  run('npm', ['publish', '--access', 'public']);
-  if (!dry && onNpm(root.name) !== root.version) { console.error(`npm does not have ${root.name}@${root.version} after publishing`); process.exit(1); }
+  // One at a time, the kit first; a package npm already has at this version
+  // is skipped, so a run that stopped halfway is picked up where it stopped.
+  if (onNpm(kit.name) === kit.version) {
+    console.log(`${kit.name}@${kit.version} is on npm already — skipping`);
+  } else {
+    run('npm', ['publish', '--workspace', 'kit', '--access', 'public']);
+    if (!dry && !(await untilNpmHas(kit.name, kit.version))) { console.error(`\nnpm still does not have ${kit.name}@${kit.version}; look at npmjs.com, then run publish again`); process.exit(1); }
+  }
+  if (onNpm(root.name) === root.version) {
+    console.log(`${root.name}@${root.version} is on npm already — skipping`);
+  } else {
+    run('npm', ['publish', '--access', 'public']);
+    if (!dry && !(await untilNpmHas(root.name, root.version))) { console.error(`\nnpm still does not have ${root.name}@${root.version}; look at npmjs.com, then run publish again`); process.exit(1); }
+  }
   console.log(`
 Published ${kit.name}@${kit.version} and ${root.name}@${root.version}.
 Next, in jtakeit-core: backend/api/sitebuild/scaffold.version → ${root.version}`);
