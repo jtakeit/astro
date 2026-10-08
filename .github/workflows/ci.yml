@@ -29,6 +29,9 @@ jobs:
           npm pack --workspace kit --dry-run 2>&1 | grep -E 'package size|total files'
           npm pack --dry-run 2>&1 | grep -E 'package size|total files'
       - name: A scaffold is laid out from the checkout and builds
+        # A slug and a directory, the kit asked of the platform's public
+        # kits endpoint, no git — and the kit from this checkout rather
+        # than from npm, so the scaffold is tried against the kit it ships with.
         run: |
-          node bin/jtk.mjs create /tmp/probe --kit salon --locale en
-          cd /tmp/probe && npm install --no-audit --no-fund && npm run build
+          node bin/jtk.mjs create probe --out /tmp/probe --kit salon --locale en --no-git
+          cd /tmp/probe && npm install --no-audit --no-fund "$GITHUB_WORKSPACE/kit" && npm run build
