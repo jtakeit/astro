@@ -7,6 +7,8 @@
  *       kit's types, collections and module into jtk/catalogue.json
  *   jtkit catalogue [--declaration src/content/blocks.ts] [--emit-only] [--dist ./dist] [--judge]
  *       write jtk/catalogue.json from a declaration and check it against the built pages
+ *   jtkit lint [--dist dist] [--root .] [--site-url https://…]
+ *       the annotation lint the platform's build runs, on this working tree
  */
 import { pathToFileURL } from 'node:url';
 import { join, dirname, resolve } from 'node:path';
@@ -40,6 +42,21 @@ switch (command) {
       console.log(`What the kit chose for the business — say each back and get a yes: jtakeit:///kits/${kit.kind}.md, «Taken by default».`);
     } catch (why) {
       console.error(`jtkit apply: ${why.message}`);
+      process.exit(1);
+    }
+    break;
+  }
+  case 'lint': {
+    // The annotation lint the platform's build runs, on this working tree:
+    // `dist/` against `jtk/` and the catalogue, every finding at once,
+    // before any push (core wiki/71 · §3.2).
+    const { lintCommand } = await import(pathToFileURL(join(HERE, '..', 'lib', 'lint.mjs')).href);
+    const root = resolve(flag('root', process.cwd()));
+    const dist = resolve(root, flag('dist', 'dist'));
+    try {
+      process.exit(await lintCommand({ root, dist, siteURL: flag('site-url', process.env.SITE_URL ?? '') }));
+    } catch (why) {
+      console.error(`jtkit lint: ${why.message}`);
       process.exit(1);
     }
     break;

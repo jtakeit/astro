@@ -8,20 +8,58 @@
     "jtkit": "bin/jtkit.mjs"
   },
   "exports": {
-    ".": { "types": "./types/index.d.ts", "default": "./index.mjs" },
-    "./booking": { "types": "./types/booking.d.ts", "default": "./lib/booking/render.mjs" },
-    "./booking/words": { "types": "./types/words.d.ts", "default": "./lib/booking/words.mjs" },
-    "./lead": { "types": "./types/lead.d.ts", "default": "./lib/lead/render.mjs" },
-    "./money": { "types": "./types/money.d.ts", "default": "./lib/money.mjs" },
-    "./meta": { "types": "./types/meta.d.ts", "default": "./lib/meta.mjs" },
-    "./kits": { "types": "./types/kits.d.ts", "default": "./lib/kits.mjs" },
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./index.mjs"
+    },
+    "./booking": {
+      "types": "./types/booking.d.ts",
+      "default": "./lib/booking/render.mjs"
+    },
+    "./booking/words": {
+      "types": "./types/words.d.ts",
+      "default": "./lib/booking/words.mjs"
+    },
+    "./lead": {
+      "types": "./types/lead.d.ts",
+      "default": "./lib/lead/render.mjs"
+    },
+    "./money": {
+      "types": "./types/money.d.ts",
+      "default": "./lib/money.mjs"
+    },
+    "./meta": {
+      "types": "./types/meta.d.ts",
+      "default": "./lib/meta.mjs"
+    },
+    "./kits": {
+      "types": "./types/kits.d.ts",
+      "default": "./lib/kits.mjs"
+    },
     "./catalogue": "./lib/catalogue.mjs",
     "./codes": "./lib/codes.mjs",
-    "./elements/booking": { "types": "./types/elements-booking.d.ts", "default": "./elements/booking.js" },
-    "./elements/lead": { "types": "./types/elements-lead.d.ts", "default": "./elements/lead.js" },
-    "./elements/alive": { "types": "./types/alive.d.ts", "default": "./elements/alive.js" },
+    "./elements/booking": {
+      "types": "./types/elements-booking.d.ts",
+      "default": "./elements/booking.js"
+    },
+    "./elements/lead": {
+      "types": "./types/elements-lead.d.ts",
+      "default": "./elements/lead.js"
+    },
+    "./elements/alive": {
+      "types": "./types/alive.d.ts",
+      "default": "./elements/alive.js"
+    },
     "./booking.css": "./booking.css",
-    "./lead.css": "./lead.css"
+    "./lead.css": "./lead.css",
+    "./lint": {
+      "types": "./types/lint.d.ts",
+      "default": "./lib/lint.mjs"
+    },
+    "./content": {
+      "types": "./types/content.d.ts",
+      "default": "./lib/content.mjs"
+    }
   },
   "files": [
     "index.mjs",

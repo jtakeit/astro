@@ -735,7 +735,35 @@ for (const file of sourceFiles(join(root, 'src'))) {
  */
 
 /** The credential, presented the way the admin API reads it. */
-function judgeRequest(text) {
+/**
+ * The working tree's other jtk/ files, sent beside the catalogue so the
+ * second judge — the settings, the entries, a price table's gaps, an add-on
+ * nobody can take — answers in the same call, before any push (core
+ * wiki/71 · §3.2). Everything under jtk/ but the catalogue itself, as
+ * `{path, text}`; a site with no jtk/ yet sends none.
+ * @param {string} root
+ * @returns {{ path: string, text: string }[]}
+ */
+export function filesBeside(root) {
+  const dir = join(root, 'jtk');
+  if (!existsSync(dir)) return [];
+  /** @type {{ path: string, text: string }[]} */
+  const out = [];
+  const walk = (/** @type {string} */ at) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = join(at, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!entry.name.endsWith('.json')) continue;
+      const rel = relative(root, full).split(sep).join('/');
+      if (rel === 'jtk/catalogue.json') continue;
+      out.push({ path: rel, text: readFileSync(full, 'utf8') });
+    }
+  };
+  walk(dir);
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function judgeRequest(text, files) {
   const api = (process.env.JTK_API ?? '').trim().replace(/\/+$/, '');
   const token = (process.env.JTK_TOKEN ?? '').trim();
   return {
@@ -753,7 +781,7 @@ function judgeRequest(text) {
         accept: 'application/json',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ catalogue: text }),
+      body: JSON.stringify(files.length > 0 ? { catalogue: text, files } : { catalogue: text }),
     },
   };
 }
@@ -782,13 +810,14 @@ as a bearer; anything else is taken for the \`sid\` cookie of a person signed in
 to the admin. The MCP server itself reads neither variable — it is hosted, and
 an agent connects to it through the browser.
 
-An agent with the MCP server needs neither: push, then \`validate_catalogue\`
-with the site and the ref judges the whole commit — this catalogue, the
-settings, the content — with the same judge and every finding at once.`);
+An agent with the MCP server needs neither: \`validate_catalogue\` with the
+catalogue and the jtk/ files beside it judges the whole working tree — this
+catalogue, the settings, the content — before any push, every finding at once.`);
     process.exit(1);
   }
 
-  const { url, init } = judgeRequest(text);
+  const files = filesBeside(root);
+  const { url, init } = judgeRequest(text, files);
 
   let response;
   try {
@@ -822,7 +851,18 @@ settings, the content — with the same judge and every finding at once.`);
     return 0;
   }
 
-  const findings = verdict.findings ?? [];
+  const all = verdict.findings ?? [];
+  // The files' findings — the settings, an entry, a price table — are the
+  // judge's alone, about files this checker never reads: printed as what
+  // they are, and not examined. The catalogue's own are the exam.
+  const ofFiles = all.filter((one) => /^jtk\//.test(one.path ?? ''));
+  const findings = all.filter((one) => !ofFiles.includes(one));
+  for (const one of ofFiles) {
+    console.error(`  ✗ ${one.code}  ${one.path}: ${one.says}`);
+  }
+  if (ofFiles.length > 0) {
+    console.error(`  ${ofFiles.length} finding(s) in the files beside the catalogue (${files.length} sent) — refused at import until fixed.\n`);
+  }
   // Advice is the judge's alone — rules about the bookings module it runs,
   // which this checker has no copy of — so it is printed and not examined.
   const advice = [...(verdict.advice ?? []), ...findings.filter((one) => isAdvice(one.code))];
@@ -845,10 +885,10 @@ settings, the content — with the same judge and every finding at once.`);
 
   if (missed.length === 0 && invented.length === 0) {
     console.log(
-      `judged by ${url} — contract ${verdict.contract}, ${findings.length} finding(s), ` +
-        'and this checker said the same',
+      `judged by ${url} — contract ${verdict.contract}, ${findings.length} finding(s) in the catalogue, ` +
+        `${ofFiles.length} in the ${files.length} file(s) beside it, and this checker said the same of the catalogue`,
     );
-    return 0;
+    return ofFiles.length;
   }
 
   console.error(`\njtk catalogue: the judge and this checker do not agree (contract ${verdict.contract})\n`);
