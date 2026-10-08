@@ -126,3 +126,15 @@ test('several of a class: the form carries «how many», hidden until the platfo
   assert.ok(SENDS.includes('quantity'));
   for (const locale of LOCALES) { assert.ok(wordsFor(locale).quantity, locale); assert.ok(wordsFor(locale).together, locale); }
 });
+
+test('a price per person says so, and an add-on is listed under its own heading', () => {
+  const html = renderBookingForm({
+    services: [...services, { slug: 'yoga', title: 'Yoga', takes: 60, costs: 1500, per: 'person' }, { slug: 'shoes', title: 'Shoes', costs: 270, per: 'person' }],
+    locale: 'en', currency: 'EUR', combine: true, now,
+  });
+  assert.ok(html.includes('data-per="person"'));
+  assert.ok(html.includes('per person'));
+  assert.ok(html.includes('<p class="booking__run-title">Add-ons</p>'));
+  assert.ok(html.indexOf('value="shoes"') > html.indexOf('value="yoga"'), 'the add-on after the services');
+  for (const locale of LOCALES) { assert.ok(wordsFor(locale).perPerson, locale); assert.ok(wordsFor(locale).addOns, locale); }
+});
