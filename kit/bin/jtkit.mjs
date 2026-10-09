@@ -9,6 +9,8 @@
  *       write jtk/catalogue.json from a declaration and check it against the built pages
  *   jtkit lint [--dist dist] [--root .] [--site-url https://…]
  *       the annotation lint the platform's build runs, on this working tree
+ *   jtkit progress [--root .] [--json]
+ *       where the site is, read off the files: the brief, the pages, the entries, what is missing
  */
 import { pathToFileURL } from 'node:url';
 import { join, dirname, resolve } from 'node:path';
@@ -45,6 +47,15 @@ switch (command) {
       process.exit(1);
     }
     break;
+  }
+  case 'progress': {
+    // The same reading the scaffold's dev server serves the panel as
+    // /_jtk/progress.json — what the owner sees as missing is what this
+    // prints (jtakeit-core, wiki/73).
+    const { readProgress, sayProgress } = await import(pathToFileURL(join(HERE, '..', 'lib', 'progress.mjs')).href);
+    const progress = await readProgress(resolve(flag('root', '.')));
+    console.log(has('json') ? JSON.stringify(progress, null, 2) : sayProgress(progress));
+    process.exit(progress.missing.length === 0 ? 0 : 1);
   }
   case 'lint': {
     // The annotation lint the platform's build runs, on this working tree:
