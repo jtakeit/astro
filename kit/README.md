@@ -165,6 +165,11 @@ scaffold.
 
 ## Also here
 
+- `@jtakeit/kit/progress` — where the site is, read off the files: the brief's
+  fill, the pages written, the entries, the settings, what is missing. The
+  scaffold's dev server serves it as `/_jtk/progress.json` for the panel, and
+  `jtkit progress` prints the same list for the agent; a rule in one is a
+  rule in both, and nothing in it is declared.
 - `@jtakeit/kit/money` — a price as the page says it: «2 300 ₴», no kopecks
   on a whole price, no sign where the site has not said its currency.
 - `@jtakeit/kit/booking/words` — the form's words per language, the salon's

@@ -56,6 +56,10 @@
       "types": "./types/lint.d.ts",
       "default": "./lib/lint.mjs"
     },
+    "./progress": {
+      "types": "./types/progress.d.ts",
+      "default": "./lib/progress.mjs"
+    },
     "./content": {
       "types": "./types/content.d.ts",
       "default": "./lib/content.mjs"
