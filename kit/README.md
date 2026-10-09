@@ -163,6 +163,25 @@ build that way yourself (`SITE_URL=https://x.invalid/p/check/`) and pass
 `--dist`. `@jtakeit/astro catalogue` is this tool, signing the file as the
 scaffold.
 
+## The page says where it is
+
+```
+npx jtkit session <session_id> <watch_key>      # --api https://api.stg.jtakeit.com on staging
+npx jtkit session --forget
+```
+
+Under `astro dev` every page carries a small card, bottom right: the seven
+phases of a site being written — the brief, the layout, the writing, read
+off the files; the judge's word, the repository, the build and the preview
+from the platform — and the steps of the panel's setting up the developer
+can take meanwhile, with the way there. The platform's half comes through
+the dev session: `open_dev_session` answers with a `watch_key`, and this
+command keeps it in `jtk/session.json`, out of git, for the dev server to
+present. The key reads that one session's progress and nothing else, and
+dies with the session. The card is `@jtakeit/kit/writing`; the rules it
+draws by are `@jtakeit/kit/phases`, the panel's own; and nothing of it is in
+a build.
+
 ## Also here
 
 - `@jtakeit/kit/progress` — where the site is, read off the files: the brief's
@@ -170,6 +189,9 @@ scaffold.
   scaffold's dev server serves it as `/_jtk/progress.json` for the panel, and
   `jtkit progress` prints the same list for the agent; a rule in one is a
   rule in both, and nothing in it is declared.
+- `@jtakeit/kit/phases` — the seven phases from the two halves, by the panel's
+  rules: a later phase counts only once every one before it does; written is
+  the still-to-do list being empty.
 - `@jtakeit/kit/money` — a price as the page says it: «2 300 ₴», no kopecks
   on a whole price, no sign where the site has not said its currency.
 - `@jtakeit/kit/booking/words` — the form's words per language, the salon's

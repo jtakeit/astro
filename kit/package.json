@@ -60,6 +60,13 @@
       "types": "./types/progress.d.ts",
       "default": "./lib/progress.mjs"
     },
+    "./phases": {
+      "types": "./types/phases.d.ts",
+      "default": "./lib/phases.mjs"
+    },
+    "./writing": {
+      "default": "./elements/writing.js"
+    },
     "./content": {
       "types": "./types/content.d.ts",
       "default": "./lib/content.mjs"
