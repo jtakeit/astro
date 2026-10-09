@@ -65,6 +65,47 @@ async function untilNpmHas(name, version) {
   }
   return false;
 }
+/**
+ * The kit as `npm publish` will upload it: `npm pack` makes the same bytes
+ * publish does (fixed mtimes, sorted entries), so its integrity is the
+ * integrity npm will record.
+ */
+function packedKit() {
+  const [packed] = JSON.parse(sh('npm pack --workspace kit --dry-run --json'));
+  return { version: packed.version, integrity: packed.integrity };
+}
+
+const TEMPLATE_LOCK = join(ROOT, 'template', 'package-lock.json');
+const KIT_IN_LOCK = 'node_modules/@jtakeit/kit';
+
+/**
+ * The template's lockfile names the kit by version, and npm cannot lock a
+ * version that is not on the registry — which the kit about to be released
+ * is not: the first release of a new kit stopped here with ETARGET
+ * (9 October 2026). So, before the kit is published, its entry is written
+ * from the tarball publish will upload: the same integrity, the registry's
+ * address. `publish` checks the tree still packs to that tarball before the
+ * kit goes out, and that npm holds the same bytes afterwards.
+ */
+function templateLockNamesKit(version, integrity) {
+  const lock = JSON.parse(readFileSync(TEMPLATE_LOCK, 'utf8'));
+  const entry = lock.packages[KIT_IN_LOCK];
+  if (entry === undefined) { console.error(`${TEMPLATE_LOCK} has no ${KIT_IN_LOCK}; install the template once`); process.exit(1); }
+  lock.packages[''].dependencies['@jtakeit/kit'] = version;
+  lock.packages[KIT_IN_LOCK] = {
+    ...entry,
+    version,
+    resolved: `https://registry.npmjs.org/@jtakeit/kit/-/kit-${version}.tgz`,
+    integrity,
+  };
+  writeFileSync(TEMPLATE_LOCK, JSON.stringify(lock, null, 2) + '\n');
+}
+
+function kitInTemplateLock() {
+  const lock = JSON.parse(readFileSync(TEMPLATE_LOCK, 'utf8'));
+  return lock.packages[KIT_IN_LOCK] ?? { version: '', integrity: '' };
+}
+
 const parse = (v) => v.split('.').map(Number);
 const greater = (a, b) => { const [x, y] = [parse(a), parse(b)]; for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i]; } return false; };
 const max = (a, b) => (greater(a, b) ? a : b);
@@ -103,8 +144,15 @@ if (command === 'bump') {
   run('npm', ['install', '--no-audit', '--no-fund']);
   // The template's own lockfile too: it is what every new site runs `npm ci`
   // against, and a release went out with it a version behind — the builder's
-  // image refused to install, and so would every site laid out from it.
-  run('npm', ['install', '--package-lock-only', '--no-audit', '--no-fund', '--prefix', 'template']);
+  // image refused to install, and so would every site laid out from it. npm
+  // writes it when the kit is on the registry; before that, the entry is
+  // written from the tarball publish will upload (templateLockNamesKit).
+  if (onNpm(kit.name) === kitNext) {
+    run('npm', ['install', '--package-lock-only', '--no-audit', '--no-fund', '--prefix', 'template']);
+  } else {
+    console.log(`${kit.name}@${kitNext} is not on npm yet: the template's lockfile names the tarball publish will upload`);
+    if (!dry) templateLockNamesKit(kitNext, packedKit().integrity);
+  }
   run('npm', ['test']);
   console.log(`
 Done. What is left is yours:
@@ -135,8 +183,23 @@ if (command === 'publish') {
   if (onNpm(kit.name) === kit.version) {
     console.log(`${kit.name}@${kit.version} is on npm already — skipping`);
   } else {
+    // The template's lockfile was written from a tarball before the kit
+    // existed on npm (bump); the tree must still pack to that tarball, or
+    // every new site's `npm ci` fails on the integrity.
+    const named = kitInTemplateLock();
+    const packed = packedKit();
+    if (named.version === kit.version && named.integrity !== packed.integrity) {
+      console.error(`the template's lockfile names a ${kit.name}@${kit.version} tarball this tree no longer packs — the kit changed since bump; run bump again (same versions) and merge that`); process.exit(1);
+    }
     run('npm', ['publish', '--workspace', 'kit', '--access', 'public']);
     if (!dry && !(await untilNpmHas(kit.name, kit.version))) { console.error(`\nnpm still does not have ${kit.name}@${kit.version}; look at npmjs.com, then run publish again`); process.exit(1); }
+    if (!dry) {
+      const held = sh(`npm view ${kit.name}@${kit.version} dist.integrity`);
+      if (held !== named.integrity) {
+        console.error(`npm holds ${kit.name}@${kit.version} with a different integrity than the template's lockfile names:\n  lockfile ${named.integrity}\n  npm      ${held}\nRefresh the lockfile — npm install --package-lock-only --no-audit --no-fund --prefix template — commit, merge, then run publish again for the scaffold.`);
+        process.exit(1);
+      }
+    }
   }
   if (onNpm(root.name) === root.version) {
     console.log(`${root.name}@${root.version} is on npm already — skipping`);
