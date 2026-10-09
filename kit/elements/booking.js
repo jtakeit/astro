@@ -187,6 +187,16 @@ export function wireBooking(form) {
   let zone = '';
   let turnstileToken = '';
 
+  /** The page's own scheme — `color-scheme` on the root — or the browser's. */
+  function turnstileTheme() {
+    const said = form.dataset.turnstileTheme;
+    if (said === 'light' || said === 'dark' || said === 'auto') return said;
+    const scheme = getComputedStyle(document.documentElement).colorScheme || '';
+    if (/\blight\b/.test(scheme) && !/\bdark\b/.test(scheme)) return 'light';
+    if (/\bdark\b/.test(scheme) && !/\blight\b/.test(scheme)) return 'dark';
+    return 'auto';
+  }
+
   // The widget, if this host has one. Asked at runtime so the site carries
   // no key: which widget covers a host is the platform's to decide.
   void fetch(api + 'turnstile', { cache: 'no-store' })
@@ -200,6 +210,12 @@ export function wireBooking(form) {
       script.onload = () => {
         window.turnstile?.render(challenge, {
           sitekey: data.sitekey,
+          // The widget in the page's colours and language, not the
+          // browser's: a light site showed a dark box saying «Успешно» to
+          // a visitor whose browser was dark and Russian (10 October 2026).
+          // `data-turnstile-theme` on the form says otherwise.
+          theme: turnstileTheme(),
+          language: pageLang(),
           callback: (token) => { turnstileToken = token; },
           'expired-callback': () => { turnstileToken = ''; },
         });
