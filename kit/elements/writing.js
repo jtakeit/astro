@@ -30,14 +30,15 @@ a:hover{text-decoration-color:var(--ink)}
 .pill{display:flex;align-items:center;gap:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:9px 14px 9px 12px;box-shadow:var(--shadow);transition:transform .18s ease}
 .pill:hover{transform:translateY(-1px)}
 .mini{display:flex;gap:3px}.mini i{display:block;width:7px;height:7px;border-radius:999px;background:var(--line2)}
-.card{width:min(372px,calc(100vw - 32px));background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px 12px;animation:in .22s cubic-bezier(.22,.61,.36,1)}
+.card{width:min(372px,calc(100vw - 32px));background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px 12px}
+.card.enter{animation:in .22s cubic-bezier(.22,.61,.36,1)}
 @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .head{display:flex;align-items:baseline;gap:10px}.title{font-weight:600;font-size:14px}.count{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
 .hide{color:var(--faint);line-height:1;padding:2px 4px;border-radius:6px;margin-right:-4px}.hide:hover{color:var(--ink);background:var(--line)}
 .strip{display:flex;gap:4px;margin-top:12px;list-style:none}.seg{flex:1;height:5px;border-radius:999px;background:var(--line2)}
 .seg.done,.mini i.done{background:var(--ok)}.seg.current,.mini i.current{background:var(--attn)}.seg.current{animation:pulse 2.4s ease-in-out infinite}
 .seg.unseen{background:transparent;border:1px solid var(--line2)}
-@keyframes pulse{50%{opacity:.45}}@media (prefers-reduced-motion:reduce){.seg.current,.card{animation:none}}
+@keyframes pulse{50%{opacity:.45}}@media (prefers-reduced-motion:reduce){.seg.current,.card.enter{animation:none}}
 .names{display:flex;gap:4px;margin-top:6px}.names span{flex:1;min-width:0;font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.names .current{color:var(--ink);font-weight:600}.names .done{color:var(--muted)}
 .say{display:flex;gap:9px;align-items:flex-start;margin-top:12px;font-weight:600;font-size:13.5px;line-height:1.35}.say i{flex:none;width:8px;height:8px;border-radius:999px;background:var(--attn);margin-top:5px}
 .todo{list-style:none;margin:6px 0 0 17px;color:var(--muted);font-size:12.5px}.todo li+li{margin-top:2px}
@@ -74,6 +75,11 @@ class JtkWriting extends HTMLElement {
     this.state = null;
     this.failed = false;
     this.timer = 0;
+    // What is on the page now: a poll that changes nothing redraws nothing,
+    // so the card does not blink every three seconds — and the entrance
+    // animation plays on a press, not on every reading.
+    this.shown = '';
+    this.enter = false;
     let collapsed = false;
     try { collapsed = localStorage.getItem(STORE) === '1'; } catch { /* a browser without storage shows it open */ }
     this.collapsed = collapsed;
@@ -89,6 +95,7 @@ class JtkWriting extends HTMLElement {
       const target = event.target instanceof Element ? event.target.closest('[data-toggle]') : null;
       if (!target) return;
       this.collapsed = !this.collapsed;
+      this.enter = !this.collapsed;
       try { localStorage.setItem(STORE, this.collapsed ? '1' : '0'); } catch { /* fine */ }
       this.render();
     });
@@ -120,9 +127,9 @@ class JtkWriting extends HTMLElement {
     const n = where.index + 1;
 
     if (this.collapsed) {
-      this.box.innerHTML = `<button class="pill" data-toggle aria-expanded="false" aria-label="Where the site is: phase ${n} of 7">
+      this.show(`<button class="pill" data-toggle aria-expanded="false" aria-label="Where the site is: phase ${n} of 7">
         <span class="mini">${where.phases.map((p) => `<i class="${p.state}"></i>`).join('')}</span>
-        <span>Being written · ${n} of 7</span></button>`;
+        <span>Being written · ${n} of 7</span></button>`);
       return;
     }
 
@@ -144,7 +151,7 @@ class JtkWriting extends HTMLElement {
       half?.until ? `platform through the session until ${until(half.until)}` : '',
     ].filter(Boolean).join(' · ');
 
-    this.box.innerHTML = `<section class="card" aria-label="Where the site is">
+    this.show(`<section class="card${this.enter ? ' enter' : ''}" aria-label="Where the site is">
       <div class="head"><span class="title">What the agent is doing</span><span class="count">phase ${n} of 7</span><button class="hide" data-toggle aria-label="Collapse">–</button></div>
       <ol class="strip" aria-label="The seven phases">${where.phases.map((p, i) => `<li class="seg ${p.state}" title="${i + 1}. ${PHASE_NAMES[p.key]}"></li>`).join('')}</ol>
       <div class="names" aria-hidden="true">${where.phases.map((p, i) => `<span class="${p.state}">${i + 1}. ${PHASE_NAMES[p.key]}</span>`).join('')}</div>
@@ -156,7 +163,16 @@ class JtkWriting extends HTMLElement {
       <p class="label">Meanwhile, in the panel</p>
       ${stepsHTML}
       <p class="foot">${esc(foot)}</p>
-    </section>`;
+    </section>`);
+  }
+
+  /** Put this on the page, unless it is what is there already. */
+  show(html) {
+    const key = html.replace(' enter', '');
+    if (key === this.shown) return;
+    this.shown = key;
+    this.box.innerHTML = html;
+    this.enter = false;
   }
 }
 
