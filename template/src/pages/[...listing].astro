@@ -79,8 +79,17 @@ const form = sells
           group: typeof entry.data.group === 'string' ? entry.data.group : undefined,
         })),
       resources: bookings?.resources
-        ? (await listed(bookings.resources)).map((entry) => ({ slug: entry.id, title: String(entry.data.title ?? entry.id) }))
+        ? (await listed(bookings.resources)).map((entry) => ({
+            slug: entry.id,
+            title: String(entry.data.title ?? entry.id),
+            // What each does, for the form to grey the other services out once
+            // they are chosen; empty is everything.
+            does: ((entry.data.does as { service: string }[] | undefined) ?? []).map((row) => row.service),
+          }))
         : [],
+      // The days the business opens, for the week of days: a closed day is
+      // not a choice.
+      open: [...new Set(((settings.hours as { day: string }[] | undefined) ?? []).map((row) => row.day))],
     }
   : undefined;
 
@@ -127,6 +136,7 @@ const heading = words(collection.label);
           <BookingForm
             services={form.services}
             resources={form.resources}
+            open={form.open}
             locale={(['uk', 'de', 'en'].includes(lang) ? lang : 'en') as 'uk' | 'de' | 'en'}
             combine={settings.combine === true}
             scale={typeof settings.scale === 'string' ? settings.scale : ''}

@@ -58,6 +58,15 @@ A form written by hand is wired too, as long as it keeps the `data-*` hooks
 and the input `name`s of the rendered one: `wireAll()` walks the document at
 load and again on the panel's `fl:placed`.
 
+**By default the form arrives dressed** — two steps, the day as a week of
+seven that never offers yesterday, the times by the part of the day, a drawn
+choice of whom, a master chosen greying out what they do not do, the time kept
+across changes, the end of the visit, a 24-hour clock, and the success showing
+the booking's link whole with *Copy* (`@jtakeit/kit/elements/booking-ui`,
+switched on by `renderBookingForm`'s `ui`, `false` for the plain form). Pass
+`open` (the days the business opens) and each resource's `does` for the week
+and the greying to know.
+
 **The look** is the site's to give. `@jtakeit/kit/booking.css` makes the form
 legible and nothing more; `field`, `field__input`, `booking__slot`,
 `booking__submit` are names to restyle with the site's own fields and

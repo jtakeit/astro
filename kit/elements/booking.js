@@ -45,6 +45,8 @@
  * says which was taken.
  */
 import { money } from '../lib/money.mjs';
+import { wordsFor } from '../lib/booking/words.mjs';
+import { dressBooking } from './booking-ui.js';
 
 // The words that depend on the kind of business, as the platform says them:
 // its availability answer carries the form's, in every language, the site's
@@ -93,7 +95,9 @@ export function wireBooking(form) {
   form.dataset.jtkWired = '1';
 
   /** @type {Record<string, string>} */
-  const words = JSON.parse(form.dataset.words ?? '{}');
+  // The form's own words under the page's: a form rendered by an older kit
+  // carries none of the newer ones.
+  const words = { ...wordsFor(form.dataset.locale ?? 'en', form.dataset.scale ?? ''), ...JSON.parse(form.dataset.words ?? '{}') };
   // Days or hours. The page's own setting first; the platform's answer,
   // once there is one, wins — an owner may switch without a rebuild.
   let daily = form.dataset.scale === 'daily';
@@ -129,6 +133,24 @@ export function wireBooking(form) {
   /** @type {HTMLElement} */ const hoursField = q('[data-hours-field]');
   /** @type {HTMLElement} */ const partyField = q('[data-party-field]');
   /** @type {HTMLInputElement} */ const day = q('[name=day]');
+  /** @type {HTMLElement | null} */ const ends = q('[data-ends]');
+  // The day's floor is the browser's today, not the build's: `min` was
+  // written when the site was built, and a site built on Friday is read on
+  // Saturday (10 October 2026).
+  {
+    const n = new Date();
+    const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    if (!day.min || day.min < today) day.min = today;
+  }
+  // What each resource does, read off the options before the element
+  // rewrites them from the platform's answers.
+  /** @type {Map<string, Set<string>>} */
+  const does = new Map();
+  for (const option of resource?.options ?? []) {
+    if (option.dataset.does) does.set(option.value, new Set(option.dataset.does.split(',').filter(Boolean)));
+  }
+  /** @type {Set<HTMLInputElement | HTMLOptionElement>} */
+  const offByMe = new Set();
   /** @type {HTMLElement} */ const slots = q('[data-slots]');
   /** @type {HTMLElement} */ const hint = q('[data-times-hint]');
   /** @type {HTMLElement} */ const error = q('[data-booking-error]');
@@ -318,11 +340,13 @@ export function wireBooking(form) {
     return midnight ? dayOf(iso, long) : `${dayOf(iso, long)}, ${clock(iso)}`;
   }
 
+  // On a 24-hour clock in every language: the sites are Swiss, German and
+  // Ukrainian, and «11:15 AM» on a Zürich salon's page reads as foreign.
   /** @param {string} iso */
   function clock(iso) {
     try {
       return new Intl.DateTimeFormat(pageLang(), {
-        hour: '2-digit', minute: '2-digit', timeZone: zone || undefined,
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone || undefined,
       }).format(new Date(iso));
     } catch {
       return iso.slice(11, 16);
@@ -446,6 +470,55 @@ export function wireBooking(form) {
     if ([...resource.options].some((o) => o.value === was)) resource.value = was;
   }
 
+  /**
+   * A resource chosen: the services they do not do go grey and come
+   * unticked, with their name on them («not with Noa»); «anyone» brings
+   * them all back. The other direction — a service chosen, the resources
+   * who do not do it — the platform's answer says (`performs`).
+   */
+  function greyByResource() {
+    const who = resource?.value ?? '';
+    const option = resource?.options[resource.selectedIndex];
+    const name = (option?.textContent ?? '').split(' · ')[0].trim();
+    const can = who && !who.startsWith('class:') && !who.startsWith('empty:') && does.has(who) ? does.get(who) : null;
+    let moved = false;
+    for (const box of boxes) {
+      const row = box.closest('.booking__service');
+      const off = can !== null && !can.has(box.value);
+      if (off && !box.disabled) {
+        box.disabled = true;
+        offByMe.add(box);
+        if (box.checked) { box.checked = false; moved = true; }
+      } else if (!off && offByMe.has(box)) {
+        box.disabled = false;
+        offByMe.delete(box);
+      }
+      row?.classList.toggle('is-off', offByMe.has(box));
+      let note = row?.querySelector('.booking__service-off') ?? null;
+      if (offByMe.has(box) && row) {
+        const nameEl = row.querySelector('.booking__service-name');
+        if (!note && nameEl) {
+          note = document.createElement('span');
+          note.className = 'booking__service-off';
+          nameEl.insertAdjacentElement('afterend', note);
+        }
+        if (note) note.textContent = words.notWith.replace('{who}', name.split(' ')[0] || name);
+      } else {
+        note?.remove();
+      }
+    }
+    for (const o of select?.options ?? []) {
+      const off = can !== null && !can.has(o.value);
+      if (off && !o.disabled) { o.disabled = true; offByMe.add(o); }
+      else if (!off && offByMe.has(o)) { o.disabled = false; offByMe.delete(o); }
+    }
+    if (select && select.options[select.selectedIndex]?.disabled) {
+      const next = [...select.options].find((o) => !o.disabled);
+      if (next) { select.value = next.value; moved = true; }
+    }
+    if (moved) showTotal();
+  }
+
   // The resource chosen, if it does not do what is asked: its name, for
   // saying so in place of «nothing free on this day».
   /** @param {{ slug: string; title: string; performs?: boolean }[]} resources */
@@ -492,8 +565,12 @@ export function wireBooking(form) {
 
   async function load() {
     const mine = ++asking;
+    // The start picked before this reload: picked again if it is still
+    // offered — a service added, the same time — and said gone if not.
+    const wanted = chosen;
     chosen = null;
     slots.textContent = '';
+    if (ends) ends.hidden = true;
     if (!day.value || picked().length === 0) {
       hint.textContent = picked().length === 0 ? words.pickService : words.pick;
       if (lastResources.length > 0) offerChoices(lastClasses, lastResources.map((one) => ({ ...one, performs: true })), []);
@@ -569,8 +646,11 @@ export function wireBooking(form) {
         // What the booking starting here costs — the platform's number, every
         // hour by its own row (wiki/68) — beside the time, whenever one came.
         if (slot.costs_minor > 0) button.textContent += ` · ${money(slot.costs_minor, currency, pageLang())}`;
+        button.dataset.start = slot.start;
         button.addEventListener('click', () => {
           chosen = slot.start;
+          if (hint.textContent === words.retime) hint.textContent = '';
+          sayEnds(slot);
           offerQuantity(data.quantity_max ?? 1, (slot.free ?? []).length);
           for (const other of slots.querySelectorAll('.booking__slot')) {
             other.classList.remove('is-chosen');
@@ -583,19 +663,48 @@ export function wireBooking(form) {
         slots.appendChild(button);
       }
       if (stay() && data.slots.length === 1) /** @type {HTMLButtonElement | null} */ (slots.firstElementChild)?.click();
+      else if (wanted) {
+        const same = /** @type {HTMLButtonElement | null} */ (slots.querySelector(`[data-start="${CSS.escape(wanted)}"]`));
+        if (same) same.click();
+        else hint.textContent = words.retime;
+      }
     } catch (err) {
-      hint.textContent = err instanceof Error && err.message ? err.message : words.failed;
+      // The platform's sentence, where it sent one; never a whole 404 page
+      // (the preview's slug missing from the address, 10 October 2026).
+      const said = err instanceof Error ? err.message : '';
+      hint.textContent = said && said.length <= 200 && !/<[a-z!]/i.test(said) ? said : words.failed;
     }
+  }
+
+  /**
+   * When the visit ends — the platform's own `ends`, said under the times:
+   * «Until about 10:45 · 1 h 15 min». Nothing by the day, which says its
+   * days on the pill.
+   * @param {{ start: string; ends?: string }} slot
+   */
+  function sayEnds(slot) {
+    if (!ends || daily || !slot.ends) return;
+    const minutes = Math.round((new Date(slot.ends).getTime() - new Date(slot.start).getTime()) / 60000);
+    if (!(minutes > 0)) return;
+    ends.dataset.clock = clock(slot.ends);
+    ends.dataset.length = lasting(minutes, words);
+    ends.textContent = `${words.until.replace('{time}', ends.dataset.clock)} · ${ends.dataset.length}`;
+    ends.hidden = false;
   }
 
   select?.addEventListener('change', () => { fitHours(); void load(); });
   hours.addEventListener('change', () => void load());
+  // The look — the steps, the week, the parts of the day, the drawn choice
+  // — over the form, where the form asks for it.
+  if (form.dataset.ui) dressBooking(form, words);
   for (const box of boxes) box.addEventListener('change', () => { showTotal(); void load(); });
-  resource?.addEventListener('change', () => void load());
+  resource?.addEventListener('change', () => { greyByResource(); void load(); });
+  greyByResource();
   // A new first date keeps the stay's length: five nights from the 10th
   // become five nights from the 12th, not whatever the old «until» leaves.
   let lastDay = day.value;
   day.addEventListener('change', () => {
+    chosen = null; // a new day starts clean
     if (lastDay && back.value && day.value) back.value = plusDays(day.value, daysBetween(lastDay, back.value));
     lastDay = day.value;
     fitBack();
@@ -686,12 +795,37 @@ export function wireBooking(form) {
     }
     if (what) {
       /** @type {HTMLElement} */ const line = q('[data-done-what]');
-      line.textContent = words.took.replace('{what}', what);
+      // A person by name is «With Noa»; a class or a group is what was taken.
+      const byName = !made.class && !(made.group && made.group.quantity > 1) && resourceChosen();
+      line.textContent = byName ? words.withNamed.replace('{who}', what) : words.took.replace('{what}', what);
       line.hidden = false;
     }
 
     /** @type {HTMLAnchorElement} */ const manage = q('[data-manage]');
     if (made.manage_path) { manage.href = made.manage_path; manage.textContent = words.manage; manage.hidden = false; }
+    // The link is the booking's only key: shown whole, with a way to copy
+    // it and a sentence saying so, where the form has the box for it.
+    /** @type {HTMLElement | null} */ const keep = q('[data-keep]');
+    if (keep && made.manage_path) {
+      const href = new URL(made.manage_path, window.location.href).href;
+      /** @type {HTMLInputElement} */ const link = q('[data-keep-link]');
+      /** @type {HTMLButtonElement} */ const copy = q('[data-keep-copy]');
+      /** @type {HTMLAnchorElement} */ const open = q('[data-keep-open]');
+      q('[data-keep-note]').textContent = words.keep;
+      link.value = href;
+      link.setAttribute('aria-label', words.manage);
+      link.addEventListener('focus', () => link.select());
+      copy.textContent = words.copy;
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(href); } catch { link.select(); document.execCommand('copy'); }
+        copy.textContent = words.copied;
+        setTimeout(() => { copy.textContent = words.copy; }, 1600);
+      });
+      open.href = href;
+      open.textContent = words.open;
+      keep.hidden = false;
+      manage.hidden = true;
+    }
     /** @type {HTMLAnchorElement} */ const tg = q('[data-telegram]');
     if (made.telegram_url) { tg.href = made.telegram_url; tg.textContent = words.telegram; tg.hidden = false; }
 
