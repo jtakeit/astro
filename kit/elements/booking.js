@@ -467,11 +467,22 @@ export function wireBooking(form) {
     return moved;
   }
 
+  // The last answer's choices, so that a form with nothing picked any more
+  // can offer every master again: «not for this choice» is about a choice,
+  // and it went on reading that way after the choice was taken back
+  // (9 October 2026).
+  let lastClasses = [];
+  let lastResources = [];
+
   async function load() {
     const mine = ++asking;
     chosen = null;
     slots.textContent = '';
-    if (!day.value || picked().length === 0) return;
+    if (!day.value || picked().length === 0) {
+      hint.textContent = picked().length === 0 ? words.pickService : words.pick;
+      if (lastResources.length > 0) offerChoices(lastClasses, lastResources.map((one) => ({ ...one, performs: true })), []);
+      return;
+    }
     hint.textContent = '…';
 
     const from = new Date(day.value + 'T00:00:00');
@@ -495,7 +506,9 @@ export function wireBooking(form) {
       if (mine !== asking) return;
       const data = await answer.json();
       hear(data.words);
-      offerChoices(data.classes ?? [], data.resources ?? [], data.empty_classes ?? []);
+      lastClasses = data.classes ?? [];
+      lastResources = data.resources ?? [];
+      offerChoices(lastClasses, lastResources, data.empty_classes ?? []);
       if (sayEmptyServices(data.empty_services ?? [])) { void load(); return; }
       zone = data.zone;
       if (typeof data.scale === 'string') daily = data.scale === 'daily';
