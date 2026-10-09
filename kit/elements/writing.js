@@ -30,6 +30,8 @@ a:hover{text-decoration-color:var(--ink)}
 .pill{display:flex;align-items:center;gap:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:9px 14px 9px 12px;box-shadow:var(--shadow);transition:transform .18s ease}
 .pill:hover{transform:translateY(-1px)}
 .mini{display:flex;gap:3px}.mini i{display:block;width:7px;height:7px;border-radius:999px;background:var(--line2)}
+.pill .dev{font-size:10px;color:var(--faint);margin-left:2px}
+.devnote{margin-top:8px;color:var(--faint);font-size:10.5px}
 .card{width:min(372px,calc(100vw - 32px));background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px 12px}
 .card.enter{animation:in .22s cubic-bezier(.22,.61,.36,1)}
 @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -129,7 +131,7 @@ class JtkWriting extends HTMLElement {
     if (this.collapsed) {
       this.show(`<button class="pill" data-toggle aria-expanded="false" aria-label="Where the site is: phase ${n} of 7">
         <span class="mini">${where.phases.map((p) => `<i class="${p.state}"></i>`).join('')}</span>
-        <span>Being written · ${n} of 7</span></button>`);
+        <span>Being written · ${n} of 7</span><span class="dev">dev only</span></button>`);
       return;
     }
 
@@ -163,6 +165,7 @@ class JtkWriting extends HTMLElement {
       <p class="label">Meanwhile, in the panel</p>
       ${stepsHTML}
       <p class="foot">${esc(foot)}</p>
+      <p class="devnote">Shown on the dev server only, while the site is being written — never in a build.</p>
     </section>`);
   }
 
