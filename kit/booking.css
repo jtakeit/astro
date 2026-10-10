@@ -6,7 +6,7 @@
  * buttons, the way the scaffold's booking.md asks. Keep the `data-*` hooks and
  * the `[hidden]` rule below whatever you do to the rest.
  */
-.booking { display: grid; gap: var(--space-4, 1rem); max-width: 34rem; }
+.booking { display: grid; gap: var(--space-4, 1rem); max-width: 34rem; scroll-margin-top: 5rem; }
 
 /* The kind's words, until the platform has said them: the space kept, the
    salon's word not shown at a car rental. */

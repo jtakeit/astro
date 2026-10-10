@@ -251,6 +251,10 @@ export function twoSteps(form, words, lang) {
   };
 
   const stage = (to) => {
+    // A move between the steps brings the form into view; the first stage,
+    // set as the page loads, must not — it scrolled every visitor to the
+    // form the moment the page opened (10 October 2026).
+    const moved = form.dataset.stage !== undefined && form.dataset.stage !== to;
     form.dataset.stage = to;
     for (const step of /** @type {NodeListOf<HTMLElement>} */ (stepper.querySelectorAll('.booking__step'))) {
       step.classList.toggle('is-current', step.dataset.at === to);
@@ -269,9 +273,9 @@ export function twoSteps(form, words, lang) {
         </dl>
         <button type="button" class="booking__back">${words.change ?? 'Change'}</button>`;
       summary.querySelector('.booking__back')?.addEventListener('click', () => stage('1'));
-      /** @type {HTMLInputElement | null} */ (form.querySelector('input[name=name]'))?.focus();
+      /** @type {HTMLInputElement | null} */ (form.querySelector('input[name=name]'))?.focus({ preventScroll: true });
     }
-    if (to !== 'done') form.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (moved && to !== 'done') form.scrollIntoView({ block: 'start', behavior: 'smooth' });
   };
 
   next.addEventListener('click', () => {
@@ -286,7 +290,7 @@ export function twoSteps(form, words, lang) {
   const done = /** @type {HTMLElement | null} */ (form.querySelector('[data-done]'));
   if (done) {
     const settle = () => {
-      if (done.hidden) return;
+      if (done.hidden || form.dataset.stage === 'done') return;
       stage('done');
       form.scrollIntoView({ block: 'start', behavior: 'smooth' });
     };
