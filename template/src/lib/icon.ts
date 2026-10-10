@@ -26,8 +26,8 @@ const PUBLIC = join(process.cwd(), 'public');
 /** Whether the mark is a picture rather than SVG — `Layout.astro` then links only the PNGs. */
 export const RASTER_MARK = existsSync(join(PUBLIC, 'icon.png'));
 
-/** The icon at `size`×`size`, as PNG bytes. */
-export async function iconPng(size: number): Promise<Uint8Array> {
+/** The icon at `size`×`size`, as PNG bytes — an ArrayBuffer, which every TypeScript takes as a response body. */
+export async function iconPng(size: number): Promise<ArrayBuffer> {
   const source = RASTER_MARK ? join(PUBLIC, 'icon.png') : join(PUBLIC, 'favicon.svg');
   if (!existsSync(source)) {
     throw new Error('the site has no icon: public/favicon.svg or public/icon.png (src/lib/icon.ts)');
@@ -37,5 +37,5 @@ export async function iconPng(size: number): Promise<Uint8Array> {
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer();
-  return new Uint8Array(out);
+  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
 }
